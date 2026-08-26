@@ -1,3 +1,6 @@
+using Microsoft.EntityFrameworkCore;
+using RagPipeline.Infrastructure.Persistence;
+
 namespace RagPipeline.API
 {
     public class Program
@@ -9,6 +12,11 @@ namespace RagPipeline.API
             // Add services to the container.
 
             builder.Services.AddControllers();
+
+            builder.Services.AddDbContext<RagDbContext>(options =>
+            {
+                options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
+            });
 
             var app = builder.Build();
 
