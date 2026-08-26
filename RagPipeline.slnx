@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="docker-compose.yml" />
+  </Folder>
+  <Project Path="RagPipeline.API/RagPipeline.API.csproj" />
+  <Project Path="RagPipeline.Application/RagPipeline.Application.csproj" />
+  <Project Path="RagPipeline.Domain/RagPipeline.Domain.csproj" />
+  <Project Path="RagPipeline.Infrastructure/RagPipeline.Infrastructure.csproj" />
+</Solution>
