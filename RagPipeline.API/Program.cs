@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Pgvector.EntityFrameworkCore;
 using RagPipeline.Application.Interfaces.Repositories;
 using RagPipeline.Application.Interfaces.Services;
 using RagPipeline.Application.Services;
@@ -22,13 +23,27 @@ namespace RagPipeline.API
 
             builder.Services.AddDbContext<RagDbContext>(options =>
             {
-                options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection"));
+                options.UseNpgsql(
+                    builder.Configuration.GetConnectionString("DefaultConnection"),
+                    npgsqlOptions =>
+                    {
+                        npgsqlOptions.UseVector();
+                    });
             });
 
             builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
             builder.Services.AddScoped<IDocumentService, DocumentService>();
             builder.Services.AddScoped<ITextExtractionService, TextExtractionService>();
             builder.Services.AddScoped<IChunkingService, ChunkingService>();
+            builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>(client =>
+            {
+                var baseUrl = builder.Configuration["Ollama:BaseUrl"]
+                    ?? throw new InvalidOperationException(
+                        "Ollama BaseUrl is missing.");
+
+                client.BaseAddress = new Uri(baseUrl);
+                client.Timeout = TimeSpan.FromMinutes(2);
+            });
 
             var app = builder.Build();
 

@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using RagPipeline.Domain.Entities;
 using System;
 using System.Collections.Generic;
@@ -21,6 +21,8 @@ namespace RagPipeline.Infrastructure.Persistence
             ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+
+            modelBuilder.HasPostgresExtension("vector");
 
             modelBuilder.Entity<Document>(entity =>
             {
@@ -45,6 +47,9 @@ namespace RagPipeline.Infrastructure.Persistence
 
                 entity.Property(x => x.Content)
                     .IsRequired();
+
+                entity.Property(x => x.Embedding)
+                    .HasColumnType("vector(768)");
 
                 entity.HasIndex(x => new
                 {
