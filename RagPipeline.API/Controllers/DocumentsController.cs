@@ -38,11 +38,13 @@ namespace RagPipeline.API.Controllers
                 return BadRequest("File size cannot exceed 10 MB.");
             }
 
-            var document = await _documentService.CreateAsync(file.FileName, file.ContentType, file.Length, cancellationToken);
+            await using var stream = file.OpenReadStream();
+
+            var document = await _documentService.UploadAsync(stream,file.FileName,file.ContentType,file.Length,cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = document.Id }, document);
         }
 
-        [HttpGet]
+        [HttpGet] 
         public async Task<ActionResult<List<DocumentResponse>>> GetAll(CancellationToken cancellationToken)
         {
             var documents = await _documentService.GetAllAsync(cancellationToken);

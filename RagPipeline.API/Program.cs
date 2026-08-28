@@ -4,6 +4,7 @@ using RagPipeline.Application.Interfaces.Services;
 using RagPipeline.Application.Services;
 using RagPipeline.Infrastructure.Persistence;
 using RagPipeline.Infrastructure.Repositories;
+using RagPipeline.Infrastructure.Services;
 
 namespace RagPipeline.API
 {
@@ -26,6 +27,8 @@ namespace RagPipeline.API
 
             builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
             builder.Services.AddScoped<IDocumentService, DocumentService>();
+            builder.Services.AddScoped<ITextExtractionService, TextExtractionService>();
+            builder.Services.AddScoped<IChunkingService, ChunkingService>();
 
             var app = builder.Build();
 
