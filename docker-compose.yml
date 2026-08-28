@@ -14,5 +14,17 @@ services:
     volumes:
       - rag_postgres_data:/var/lib/postgresql/data
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: rag-ollama
+
+    ports:
+      - "11434:11434"
+
+    volumes:
+      - rag_ollama_data:/root/.ollama
+
+
 volumes:
   rag_postgres_data:
+  rag_ollama_data:

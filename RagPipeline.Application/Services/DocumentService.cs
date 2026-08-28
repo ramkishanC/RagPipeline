@@ -2,6 +2,7 @@ using RagPipeline.Application.DTOs.Documents;
 using RagPipeline.Application.Interfaces.Repositories;
 using RagPipeline.Application.Interfaces.Services;
 using RagPipeline.Domain.Entities;
+using Pgvector;
 
 namespace RagPipeline.Application.Services
 {
@@ -10,15 +11,18 @@ namespace RagPipeline.Application.Services
         private readonly IDocumentRepository _documentRepository;
         private readonly ITextExtractionService _textExtractionService;
         private readonly IChunkingService _chunkingService;
+        private readonly IEmbeddingService _embeddingService;
 
         public DocumentService(
             IDocumentRepository documentRepository,
             ITextExtractionService textExtractionService,
-            IChunkingService chunkingService)
+            IChunkingService chunkingService,
+            IEmbeddingService embeddingService)
         {
             _documentRepository = documentRepository;
             _textExtractionService = textExtractionService;
             _chunkingService = chunkingService;
+            _embeddingService = embeddingService;
         }
 
         public async Task<DocumentResponse> UploadAsync(Stream stream, string fileName, string contentType, long fileSize, CancellationToken cancellationToken = default)
@@ -37,6 +41,18 @@ namespace RagPipeline.Application.Services
             {
                 throw new InvalidOperationException(
                     "No chunks could be created from the document.");
+            }
+
+            var embeddings = await _embeddingService.GenerateEmbeddingsAsync(chunks,cancellationToken);
+
+            if (embeddings.Count != chunks.Count)
+            {
+                throw new InvalidOperationException("Embedding count does not match chunk count.");
+            }
+
+            if (embeddings.Any(x => x.Length != 768))
+            {
+                throw new InvalidOperationException("Expected 768-dimensional embeddings.");
             }
 
             var documentId = Guid.NewGuid();
@@ -62,6 +78,7 @@ namespace RagPipeline.Application.Services
                         Content = content,
                         ChunkIndex = i,
                         TokenCount = Math.Max(1, (int)Math.Ceiling(content.Length / 4.0)),
+                        Embedding = new Vector(embeddings[i]),
                         CreatedAt = DateTime.UtcNow
                     });
             }
