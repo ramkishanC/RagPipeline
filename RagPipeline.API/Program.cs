@@ -33,10 +33,12 @@ namespace RagPipeline.API
 
             builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
             builder.Services.AddScoped<IVectorSearchRepository, VectorSearchRepository>();
+            builder.Services.AddScoped<IKeywordSearchRepository, KeywordSearchRepository>();
             builder.Services.AddScoped<IDocumentService, DocumentService>();
             builder.Services.AddScoped<ITextExtractionService, TextExtractionService>();
             builder.Services.AddScoped<IChunkingService, ChunkingService>();
             builder.Services.AddScoped<IVectorSearchService, VectorSearchService>();
+            builder.Services.AddScoped<IKeywordSearchService, KeywordSearchService>();
             builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>(client =>
             {
                 var baseUrl = builder.Configuration["Ollama:BaseUrl"]

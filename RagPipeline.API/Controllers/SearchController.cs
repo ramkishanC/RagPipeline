@@ -9,18 +9,28 @@ namespace RagPipeline.API.Controllers
     public class SearchController : ControllerBase
     {
         private readonly IVectorSearchService _vectorSearchService;
+        private readonly IKeywordSearchService _keywordSearchService;
 
-        public SearchController(IVectorSearchService vectorSearchService)
+        public SearchController(
+            IVectorSearchService vectorSearchService,
+            IKeywordSearchService keywordSearchService)
         {
             _vectorSearchService = vectorSearchService;
+            _keywordSearchService = keywordSearchService;
         }
 
         [HttpPost("vector")]
-        public async Task<ActionResult<VectorSearchResponse>> VectorSearch(
-            VectorSearchRequest request,
-            CancellationToken cancellationToken)
+        public async Task<ActionResult<VectorSearchResponse>> VectorSearch(VectorSearchRequest request, CancellationToken cancellationToken)
         {
-            var result = await _vectorSearchService.SearchAsync(request.Query,request.TopK,cancellationToken);
+            var result = await _vectorSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
+
+            return Ok(result);
+        }
+
+        [HttpPost("keyword")]
+        public async Task<ActionResult<KeywordSearchResponse>> KeywordSearch(KeywordSearchRequest request, CancellationToken cancellationToken)
+        {
+            var result = await _keywordSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
 
             return Ok(result);
         }

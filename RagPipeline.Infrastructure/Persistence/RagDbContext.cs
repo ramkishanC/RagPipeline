@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using NpgsqlTypes;
 using RagPipeline.Domain.Entities;
 using System;
 using System.Collections.Generic;
@@ -17,8 +18,7 @@ namespace RagPipeline.Infrastructure.Persistence
 
         public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();
 
-        protected override void OnModelCreating(
-            ModelBuilder modelBuilder)
+        protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
@@ -51,11 +51,13 @@ namespace RagPipeline.Infrastructure.Persistence
                 entity.Property(x => x.Embedding)
                     .HasColumnType("vector(768)");
 
-                entity.HasIndex(x => new
-                {
-                    x.DocumentId,
-                    x.ChunkIndex
-                });
+                entity.Property<NpgsqlTsVector>("SearchVector")
+                    .IsGeneratedTsVectorColumn("english", nameof(DocumentChunk.Content));
+
+                entity.HasIndex("SearchVector")
+                    .HasMethod("GIN");
+
+                entity.HasIndex(x => new { x.DocumentId, x.ChunkIndex });
             });
         }
     }
