@@ -12,13 +12,15 @@ namespace RagPipeline.API.Controllers
         private readonly IKeywordSearchService _keywordSearchService;
         private readonly IHybridSearchService _hybridSearchService;
         private readonly IRerankedSearchService _rerankedSearchService;
+        private readonly IAnswerGenerationService _answerGenerationService;
 
-        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService)
+        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService)
         {
             _vectorSearchService = vectorSearchService;
             _keywordSearchService = keywordSearchService;
             _hybridSearchService = hybridSearchService;
             _rerankedSearchService = rerankedSearchService;
+            _answerGenerationService = answerGenerationService;
         }
 
         [HttpPost("vector")]
@@ -51,6 +53,24 @@ namespace RagPipeline.API.Controllers
             var result = await _rerankedSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
 
             return Ok(result);
+        }
+
+        [HttpPost("ask")]
+        public async Task<ActionResult<AskResponse>> Ask(AskRequest request, CancellationToken cancellationToken)
+        {
+            var rerankedResult = await _rerankedSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
+
+            var context = rerankedResult.Results
+                .Select(x => x.Content)
+                .ToList();
+
+            var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, cancellationToken);
+
+            return Ok(new AskResponse
+            {
+                Query = request.Query,
+                Answer = answer
+            });
         }
     }
 }
