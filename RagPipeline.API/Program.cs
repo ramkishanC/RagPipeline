@@ -33,15 +33,26 @@ namespace RagPipeline.API
 
             builder.Services.AddScoped<IDocumentRepository, DocumentRepository>();
             builder.Services.AddScoped<IVectorSearchRepository, VectorSearchRepository>();
+            builder.Services.AddScoped<IKeywordSearchRepository, KeywordSearchRepository>();
             builder.Services.AddScoped<IDocumentService, DocumentService>();
             builder.Services.AddScoped<ITextExtractionService, TextExtractionService>();
             builder.Services.AddScoped<IChunkingService, ChunkingService>();
             builder.Services.AddScoped<IVectorSearchService, VectorSearchService>();
+            builder.Services.AddScoped<IKeywordSearchService, KeywordSearchService>();
+            builder.Services.AddScoped<IHybridSearchService, HybridSearchService>();
+            builder.Services.AddScoped<IRerankedSearchService, RerankedSearchService>();
             builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>(client =>
             {
                 var baseUrl = builder.Configuration["Ollama:BaseUrl"]
                     ?? throw new InvalidOperationException(
                         "Ollama BaseUrl is missing.");
+
+                client.BaseAddress = new Uri(baseUrl);
+                client.Timeout = TimeSpan.FromMinutes(2);
+            });
+            builder.Services.AddHttpClient<IRerankerService, RerankerService>(client =>
+            {
+                var baseUrl = builder.Configuration["Reranker:BaseUrl"] ?? throw new InvalidOperationException("Reranker BaseUrl is missing.");
 
                 client.BaseAddress = new Uri(baseUrl);
                 client.Timeout = TimeSpan.FromMinutes(2);
