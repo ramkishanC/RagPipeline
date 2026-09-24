@@ -34,12 +34,15 @@ namespace RagPipeline.Infrastructure.Services
             var combinedContext = string.Join("\n\n---\n\n",context);
 
             var prompt = $"""
-            You are a helpful assistant answering questions using the provided context.
+            You are a helpful assistant answering questions using only the provided context.
 
             Rules:
-            - Answer using only the provided context.
-            - Do not invent information.
-            - If the context does not contain the answer, say that the information is not available in the provided context.
+            - Use only information explicitly stated in the context.
+            - Do not invent, assume, or add information from your own knowledge.
+            - Include all directly relevant facts needed to answer the question.
+            - Do not omit relevant names, technologies, tools, products, or other key entities mentioned in the context.
+            - If the question asks which technologies, tools, or components were used, include all relevant ones stated in the context.
+            - If the context does not contain enough information to answer the question, say that the information is not available in the provided context.
             - Keep the answer concise and directly answer the question.
 
             Context:
@@ -56,10 +59,10 @@ namespace RagPipeline.Infrastructure.Services
                 Messages =
                 [
                     new OllamaChatMessage
-                {
-                    Role = "user",
-                    Content = prompt
-                }
+                    {
+                        Role = "user",
+                        Content = prompt
+                    }
                 ]
             };
 
