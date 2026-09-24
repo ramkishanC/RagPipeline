@@ -24,7 +24,23 @@ services:
     volumes:
       - rag_ollama_data:/root/.ollama
 
+  reranker:
+    build:
+      context: ./reranker
+
+    container_name: rag-reranker
+
+    ports:
+      - "8001:8000"
+
+    environment:
+      HF_HOME: /models
+
+    volumes:
+      - rag_reranker_models:/models
+
 
 volumes:
   rag_postgres_data:
   rag_ollama_data:
+  rag_reranker_models:
