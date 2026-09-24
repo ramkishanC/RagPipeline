@@ -6,6 +6,8 @@ namespace RagPipeline.Application.DTOs.Search
 {
     public class AskSource
     {
+        public string Citation { get; set; } = string.Empty;
+
         public string FileName { get; set; } = string.Empty;
 
         public Guid ChunkId { get; set; }

@@ -77,15 +77,10 @@ namespace RagPipeline.API.Controllers
                 });
             }
 
-            var context = relevantResults
-                .Select(x => x.Content)
-                .ToList();
-
-            var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, cancellationToken);
-
             var sources = relevantResults
-                .Select(x => new AskSource
+                .Select((x, index) => new AskSource
                 {
+                    Citation = $"[{index + 1}]",
                     FileName = x.FileName,
                     ChunkId = x.ChunkId,
                     ChunkIndex = x.ChunkIndex,
@@ -93,6 +88,13 @@ namespace RagPipeline.API.Controllers
                     Content = x.Content
                 })
                 .ToList();
+
+            var context = relevantResults
+                .Select((x, index) =>
+                    $"SOURCE [{index + 1}]\n{x.Content}")
+                .ToList();
+
+            var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, cancellationToken);
 
             return Ok(new AskResponse
             {

@@ -34,22 +34,30 @@ namespace RagPipeline.Infrastructure.Services
             var combinedContext = string.Join("\n\n---\n\n",context);
 
             var prompt = $"""
-            You are a helpful assistant answering questions using only the provided context.
+            You are a retrieval-augmented question answering assistant.
 
-            Rules:
-            - Use only information explicitly stated in the context.
-            - Do not invent, assume, or add information from your own knowledge.
-            - Include all directly relevant facts needed to answer the question.
-            - Do not omit relevant names, technologies, tools, products, or other key entities mentioned in the context.
-            - If the question asks which technologies, tools, or components were used, include all relevant ones stated in the context.
-            - If the context does not contain enough information to answer the question, say that the information is not available in the provided context.
-            - Keep the answer concise and directly answer the question.
+            Answer the question using ONLY the provided context.
+
+            Instructions:
+            1. Find the exact information in the context that answers the question.
+            2. Preserve every relevant named entity from the context.
+            3. If the context lists multiple technologies, tools, products, or components relevant to the question, include ALL of them.
+            4. Do not choose only one item when multiple relevant items are explicitly stated.
+            5. Do not use outside knowledge.
+            6. Do not invent information.
+            7. Keep the answer concise.
+            8. Add the source citation immediately after the statement using the citation number provided in the context.
+            9. Never create a citation number that is not present in the context.
+            10. If the context does not contain enough information, respond exactly:
+               "The information is not available in the provided context."
 
             Context:
             {combinedContext}
 
             Question:
             {query}
+
+            Answer:
             """;
 
             var request = new OllamaChatRequest
