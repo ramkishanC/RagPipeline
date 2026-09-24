@@ -66,10 +66,22 @@ namespace RagPipeline.API.Controllers
 
             var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, cancellationToken);
 
+            var sources = rerankedResult.Results
+                .Select(x => new AskSource
+                {
+                    FileName = x.FileName,
+                    ChunkId = x.ChunkId,
+                    ChunkIndex = x.ChunkIndex,
+                    RerankScore = x.RerankScore,
+                    Content = x.Content
+                })
+                .ToList();
+
             return Ok(new AskResponse
             {
                 Query = request.Query,
-                Answer = answer
+                Answer = answer,
+                Sources = sources
             });
         }
     }
