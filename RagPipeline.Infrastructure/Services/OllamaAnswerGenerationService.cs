@@ -46,9 +46,13 @@ namespace RagPipeline.Infrastructure.Services
             5. Do not use outside knowledge.
             6. Do not invent information.
             7. Keep the answer concise.
-            8. Add the source citation immediately after the statement using the citation number provided in the context.
-            9. Never create a citation number that is not present in the context.
-            10. If the context does not contain enough information, respond exactly:
+            8. Every factual statement based on the context must end with its source citation.
+            9. Put the citation at the end of the sentence, for example:
+               "RabbitMQ and MassTransit were used for asynchronous order processing. [1]"
+            10. Do not write "SOURCE [1]" or "Source [1]" in the answer.
+            11. Use only the citation numbers provided in the context.
+            12. Never create a citation number that does not exist in the context.
+            13. If the context does not contain enough information, respond exactly:
                "The information is not available in the provided context."
 
             Context:

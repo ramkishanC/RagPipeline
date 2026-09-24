@@ -91,7 +91,7 @@ namespace RagPipeline.API.Controllers
 
             var context = relevantResults
                 .Select((x, index) =>
-                    $"SOURCE [{index + 1}]\n{x.Content}")
+                    $"[{index + 1}] {x.Content}")
                 .ToList();
 
             var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, cancellationToken);
