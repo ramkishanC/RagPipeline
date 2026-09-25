@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
 using RagPipeline.Application.DTOs.Search;
 using RagPipeline.Application.Interfaces.Services;
@@ -96,12 +97,52 @@ namespace RagPipeline.API.Controllers
 
             var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, cancellationToken);
 
+            if (!HasValidCitations(answer, sources.Count))
+            {
+                return Ok(new AskResponse
+                {
+                    Query = request.Query,
+                    Answer = "I could not verify the generated answer against the retrieved sources.",
+                    Sources = sources
+                });
+            }
+
             return Ok(new AskResponse
             {
                 Query = request.Query,
                 Answer = answer,
                 Sources = sources
             });
+        }
+
+        private static bool HasValidCitations(string answer, int sourceCount)
+        {
+            if (sourceCount <= 0)
+            {
+                return true;
+            }
+
+            var matches = Regex.Matches(answer, @"\[(\d+)\]");
+
+            if (matches.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (Match match in matches)
+            {
+                if (!int.TryParse(match.Groups[1].Value, out var citationNumber))
+                {
+                    return false;
+                }
+
+                if (citationNumber < 1 || citationNumber > sourceCount)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }
