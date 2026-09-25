@@ -30,7 +30,12 @@ namespace RagPipeline.API.Controllers
         [HttpPost("vector")]
         public async Task<ActionResult<VectorSearchResponse>> VectorSearch(VectorSearchRequest request, CancellationToken cancellationToken)
         {
-            var result = await _vectorSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
+            if (request.KnowledgeBaseId == Guid.Empty)
+            {
+                return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            var result = await _vectorSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
 
             return Ok(result);
         }
