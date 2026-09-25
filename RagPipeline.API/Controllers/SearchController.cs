@@ -14,13 +14,16 @@ namespace RagPipeline.API.Controllers
         private readonly IRerankedSearchService _rerankedSearchService;
         private readonly IAnswerGenerationService _answerGenerationService;
 
-        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService)
+        private readonly double _minimumRerankScore;
+
+        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration)
         {
             _vectorSearchService = vectorSearchService;
             _keywordSearchService = keywordSearchService;
             _hybridSearchService = hybridSearchService;
             _rerankedSearchService = rerankedSearchService;
             _answerGenerationService = answerGenerationService;
+            _minimumRerankScore = configuration.GetValue<double>("Rag:MinimumRerankScore");
         }
 
         [HttpPost("vector")]
@@ -58,10 +61,37 @@ namespace RagPipeline.API.Controllers
         [HttpPost("ask")]
         public async Task<ActionResult<AskResponse>> Ask(AskRequest request, CancellationToken cancellationToken)
         {
-            var rerankedResult = await _rerankedSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
+            var rerankedResult = await _rerankedSearchService.SearchAsync( request.Query, request.TopK, cancellationToken);
 
-            var context = rerankedResult.Results
-                .Select(x => x.Content)
+            var relevantResults = rerankedResult.Results
+                .Where(x => x.RerankScore >= _minimumRerankScore)
+                .ToList();
+
+            if (relevantResults.Count == 0)
+            {
+                return Ok(new AskResponse
+                {
+                    Query = request.Query,
+                    Answer = "I don't have enough information in the provided documents to answer this question.",
+                    Sources = []
+                });
+            }
+
+            var sources = relevantResults
+                .Select((x, index) => new AskSource
+                {
+                    Citation = $"[{index + 1}]",
+                    FileName = x.FileName,
+                    ChunkId = x.ChunkId,
+                    ChunkIndex = x.ChunkIndex,
+                    RerankScore = x.RerankScore,
+                    Content = x.Content
+                })
+                .ToList();
+
+            var context = relevantResults
+                .Select((x, index) =>
+                    $"[{index + 1}] {x.Content}")
                 .ToList();
 
             var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, cancellationToken);
@@ -69,7 +99,8 @@ namespace RagPipeline.API.Controllers
             return Ok(new AskResponse
             {
                 Query = request.Query,
-                Answer = answer
+                Answer = answer,
+                Sources = sources
             });
         }
     }
