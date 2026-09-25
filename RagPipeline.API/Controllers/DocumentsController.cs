@@ -17,8 +17,13 @@ namespace RagPipeline.API.Controllers
 
         [HttpPost]
         [Consumes("multipart/form-data")]
-        public async Task<ActionResult<DocumentResponse>> Upload(IFormFile file, CancellationToken cancellationToken)
+        public async Task<ActionResult<DocumentResponse>> Upload([FromQuery] Guid knowledgeBaseId, IFormFile file, CancellationToken cancellationToken)
         {
+            if (knowledgeBaseId == Guid.Empty)
+            {
+                return BadRequest("KnowledgeBaseId is required.");
+            }
+
             if (file is null || file.Length == 0)
             {
                 return BadRequest("File is required.");
@@ -40,7 +45,7 @@ namespace RagPipeline.API.Controllers
 
             await using var stream = file.OpenReadStream();
 
-            var document = await _documentService.UploadAsync(stream,file.FileName,file.ContentType,file.Length,cancellationToken);
+            var document = await _documentService.UploadAsync(knowledgeBaseId,stream,file.FileName,file.ContentType,file.Length,cancellationToken);
             return CreatedAtAction(nameof(GetById), new { id = document.Id }, document);
         }
 

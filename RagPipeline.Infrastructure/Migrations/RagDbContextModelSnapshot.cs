@@ -47,7 +47,12 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.Property<long>("FileSize")
                         .HasColumnType("bigint");
 
+                    b.Property<Guid>("KnowledgeBaseId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("KnowledgeBaseId");
 
                     b.ToTable("Documents");
                 });
@@ -94,6 +99,63 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.ToTable("DocumentChunks");
                 });
 
+            modelBuilder.Entity("RagPipeline.Domain.Entities.KnowledgeBase", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("RagUserId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RagUserId", "Name");
+
+                    b.ToTable("KnowledgeBases");
+                });
+
+            modelBuilder.Entity("RagPipeline.Domain.Entities.RagUser", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExternalUserId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExternalUserId")
+                        .IsUnique();
+
+                    b.ToTable("RagUsers");
+                });
+
+            modelBuilder.Entity("RagPipeline.Domain.Entities.Document", b =>
+                {
+                    b.HasOne("RagPipeline.Domain.Entities.KnowledgeBase", "KnowledgeBase")
+                        .WithMany("Documents")
+                        .HasForeignKey("KnowledgeBaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("KnowledgeBase");
+                });
+
             modelBuilder.Entity("RagPipeline.Domain.Entities.DocumentChunk", b =>
                 {
                     b.HasOne("RagPipeline.Domain.Entities.Document", "Document")
@@ -105,9 +167,30 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.Navigation("Document");
                 });
 
+            modelBuilder.Entity("RagPipeline.Domain.Entities.KnowledgeBase", b =>
+                {
+                    b.HasOne("RagPipeline.Domain.Entities.RagUser", "RagUser")
+                        .WithMany("KnowledgeBases")
+                        .HasForeignKey("RagUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("RagUser");
+                });
+
             modelBuilder.Entity("RagPipeline.Domain.Entities.Document", b =>
                 {
                     b.Navigation("Chunks");
+                });
+
+            modelBuilder.Entity("RagPipeline.Domain.Entities.KnowledgeBase", b =>
+                {
+                    b.Navigation("Documents");
+                });
+
+            modelBuilder.Entity("RagPipeline.Domain.Entities.RagUser", b =>
+                {
+                    b.Navigation("KnowledgeBases");
                 });
 #pragma warning restore 612, 618
         }

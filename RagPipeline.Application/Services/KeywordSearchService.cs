@@ -35,4 +35,32 @@ public class KeywordSearchService : IKeywordSearchService
             Results = results
         };
     }
+
+    public async Task<KeywordSearchResponse> SearchAsync(Guid knowledgeBaseId, string query, int topK = 5, CancellationToken cancellationToken = default)
+    {
+        if (knowledgeBaseId == Guid.Empty)
+        {
+            throw new ArgumentException("Knowledge base ID is required.", nameof(knowledgeBaseId));
+        }
+
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            throw new ArgumentException("Search query is required.", nameof(query));
+        }
+
+        if (topK <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(topK));
+        }
+
+        topK = Math.Min(topK, 20);
+
+        var results = await _keywordSearchRepository.SearchAsync(knowledgeBaseId, query, topK, cancellationToken);
+
+        return new KeywordSearchResponse
+        {
+            Query = query,
+            Results = results
+        };
+    }
 }

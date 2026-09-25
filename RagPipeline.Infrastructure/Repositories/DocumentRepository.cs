@@ -29,5 +29,10 @@ namespace RagPipeline.Infrastructure.Repositories
         {
             return await _dbContext.Documents.AsNoTracking().OrderByDescending(x => x.CreatedAt).ToListAsync(cancellationToken);
         }
+
+        public async Task<bool> KnowledgeBaseExistsAsync(Guid knowledgeBaseId, CancellationToken cancellationToken = default)
+        {
+            return await _dbContext.KnowledgeBases.AsNoTracking().AnyAsync(x => x.Id == knowledgeBaseId, cancellationToken);
+        }
     }
 }
