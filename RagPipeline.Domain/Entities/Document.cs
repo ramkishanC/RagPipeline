@@ -8,6 +8,8 @@ namespace RagPipeline.Domain.Entities
     {
         public Guid Id { get; set; }
 
+        public Guid KnowledgeBaseId { get; set; }
+
         public string FileName { get; set; } = string.Empty;
 
         public string ContentType { get; set; } = string.Empty;
@@ -15,6 +17,8 @@ namespace RagPipeline.Domain.Entities
         public long FileSize { get; set; }
 
         public DateTime CreatedAt { get; set; }
+
+        public KnowledgeBase KnowledgeBase { get; set; } = null!;
 
         public ICollection<DocumentChunk> Chunks { get; set; } = new List<DocumentChunk>();
     }

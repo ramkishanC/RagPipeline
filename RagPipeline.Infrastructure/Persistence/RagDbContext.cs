@@ -18,11 +18,48 @@ namespace RagPipeline.Infrastructure.Persistence
 
         public DbSet<DocumentChunk> DocumentChunks => Set<DocumentChunk>();
 
+        public DbSet<RagUser> RagUsers => Set<RagUser>();
+
+        public DbSet<KnowledgeBase> KnowledgeBases => Set<KnowledgeBase>();
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
 
             modelBuilder.HasPostgresExtension("vector");
+
+            modelBuilder.Entity<RagUser>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.ExternalUserId)
+                    .IsRequired()
+                    .HasMaxLength(200);
+
+                entity.HasIndex(x => x.ExternalUserId)
+                    .IsUnique();
+
+                entity.HasMany(x => x.KnowledgeBases)
+                    .WithOne(x => x.RagUser)
+                    .HasForeignKey(x => x.RagUserId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<KnowledgeBase>(entity =>
+            {
+                entity.HasKey(x => x.Id);
+
+                entity.Property(x => x.Name)
+                    .IsRequired()
+                    .HasMaxLength(200);
+
+                entity.HasMany(x => x.Documents)
+                    .WithOne(x => x.KnowledgeBase)
+                    .HasForeignKey(x => x.KnowledgeBaseId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(x => new { x.RagUserId, x.Name });
+            });
 
             modelBuilder.Entity<Document>(entity =>
             {
