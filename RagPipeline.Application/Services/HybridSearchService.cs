@@ -16,8 +16,13 @@ public class HybridSearchService : IHybridSearchService
         _keywordSearchService = keywordSearchService;
     }
 
-    public async Task<HybridSearchResponse> SearchAsync(string query, int topK = 5, CancellationToken cancellationToken = default)
+    public async Task<HybridSearchResponse> SearchAsync(Guid knowledgeBaseId, string query, int topK = 5, CancellationToken cancellationToken = default)
     {
+        if (knowledgeBaseId == Guid.Empty)
+        {
+            throw new ArgumentException("Knowledge base ID is required.", nameof(knowledgeBaseId));
+        }
+
         if (string.IsNullOrWhiteSpace(query))
         {
             throw new ArgumentException("Search query is required.", nameof(query));
@@ -31,8 +36,8 @@ public class HybridSearchService : IHybridSearchService
         topK = Math.Min(topK, 20);
 
         var candidateK = Math.Min(Math.Max(topK * 4, 20), 50);
-        var vectorResponse = await _vectorSearchService.SearchAsync(query, candidateK, cancellationToken);
-        var keywordResponse = await _keywordSearchService.SearchAsync(query, candidateK, cancellationToken);
+        var vectorResponse = await _vectorSearchService.SearchAsync(knowledgeBaseId, query, candidateK, cancellationToken);
+        var keywordResponse = await _keywordSearchService.SearchAsync(knowledgeBaseId, query, candidateK, cancellationToken);
         var fused = new Dictionary<Guid, HybridSearchResult>();
 
         for (var i = 0; i < vectorResponse.Results.Count; i++)

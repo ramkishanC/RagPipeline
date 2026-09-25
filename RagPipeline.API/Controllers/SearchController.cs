@@ -56,7 +56,12 @@ namespace RagPipeline.API.Controllers
         [HttpPost("hybrid")]
         public async Task<ActionResult<HybridSearchResponse>> HybridSearch(HybridSearchRequest request, CancellationToken cancellationToken)
         {
-            var result = await _hybridSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
+            if (request.KnowledgeBaseId == Guid.Empty)
+            {
+                return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            var result = await _hybridSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
 
             return Ok(result);
         }
@@ -64,7 +69,12 @@ namespace RagPipeline.API.Controllers
         [HttpPost("reranked")]
         public async Task<ActionResult<RerankedSearchResponse>> RerankedSearch(HybridSearchRequest request, CancellationToken cancellationToken)
         {
-            var result = await _rerankedSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
+            if (request.KnowledgeBaseId == Guid.Empty)
+            {
+                return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            var result = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
 
             return Ok(result);
         }
@@ -72,7 +82,12 @@ namespace RagPipeline.API.Controllers
         [HttpPost("ask")]
         public async Task<ActionResult<AskResponse>> Ask(AskRequest request, CancellationToken cancellationToken)
         {
-            var rerankedResult = await _rerankedSearchService.SearchAsync( request.Query, request.TopK, cancellationToken);
+            if (request.KnowledgeBaseId == Guid.Empty)
+            {
+                return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
 
             var relevantResults = rerankedResult.Results
                 .Where(x => x.RerankScore >= _minimumRerankScore)
