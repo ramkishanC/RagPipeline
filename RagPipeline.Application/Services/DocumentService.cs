@@ -25,8 +25,15 @@ namespace RagPipeline.Application.Services
             _embeddingService = embeddingService;
         }
 
-        public async Task<DocumentResponse> UploadAsync(Stream stream, string fileName, string contentType, long fileSize, CancellationToken cancellationToken = default)
+        public async Task<DocumentResponse> UploadAsync(Guid knowledgeBaseId, Stream stream, string fileName, string contentType, long fileSize, CancellationToken cancellationToken = default)
         {
+            var knowledgeBaseExists = await _documentRepository.KnowledgeBaseExistsAsync(knowledgeBaseId, cancellationToken);
+
+            if (!knowledgeBaseExists)
+            {
+                throw new KeyNotFoundException($"Knowledge base '{knowledgeBaseId}' was not found.");
+            }
+
             var text = await _textExtractionService.ExtractAsync(stream,fileName,cancellationToken);
 
             if (string.IsNullOrWhiteSpace(text))
@@ -60,6 +67,7 @@ namespace RagPipeline.Application.Services
             var document = new Document
             {
                 Id = documentId,
+                KnowledgeBaseId = knowledgeBaseId,
                 FileName = fileName,
                 ContentType = contentType,
                 FileSize = fileSize,
@@ -104,6 +112,7 @@ namespace RagPipeline.Application.Services
             return new DocumentResponse
             {
                 Id = document.Id,
+                KnowledgeBaseId = document.KnowledgeBaseId,
                 FileName = document.FileName,
                 ContentType = document.ContentType,
                 FileSize = document.FileSize,
