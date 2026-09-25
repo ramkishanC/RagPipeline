@@ -43,7 +43,12 @@ namespace RagPipeline.API.Controllers
         [HttpPost("keyword")]
         public async Task<ActionResult<KeywordSearchResponse>> KeywordSearch(KeywordSearchRequest request, CancellationToken cancellationToken)
         {
-            var result = await _keywordSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
+            if (request.KnowledgeBaseId == Guid.Empty)
+            {
+                return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            var result = await _keywordSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
 
             return Ok(result);
         }
