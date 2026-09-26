@@ -1,11 +1,13 @@
-using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RagPipeline.Application.DTOs;
 using RagPipeline.Application.DTOs.Search;
 using RagPipeline.Application.Interfaces.Services;
+using System.Text.RegularExpressions;
 
 namespace RagPipeline.API.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class SearchController : ControllerBase

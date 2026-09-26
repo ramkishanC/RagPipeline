@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RagPipeline.Application.DTOs;
 using RagPipeline.Application.DTOs.KnowledgeBases;
@@ -5,6 +6,7 @@ using RagPipeline.Application.Interfaces.Services;
 
 namespace RagPipeline.API.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class KnowledgeBaseController : ControllerBase
