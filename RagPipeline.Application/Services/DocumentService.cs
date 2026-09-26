@@ -101,9 +101,9 @@ namespace RagPipeline.Application.Services
             return document is null ? null : Map(document);
         }
 
-        public async Task<List<DocumentResponse>> GetAllAsync(CancellationToken cancellationToken = default)
+        public async Task<List<DocumentResponse>> GetAllAsync(Guid knowledgeBaseId, CancellationToken cancellationToken = default)
         {
-            var documents = await _documentRepository.GetAllAsync(cancellationToken);
+            var documents = await _documentRepository.GetAllByKnowledgeBaseIdAsync(knowledgeBaseId, cancellationToken);
             return documents.Select(Map).ToList();
         }
 

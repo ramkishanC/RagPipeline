@@ -14,10 +14,11 @@ namespace RagPipeline.API.Controllers
         private readonly IHybridSearchService _hybridSearchService;
         private readonly IRerankedSearchService _rerankedSearchService;
         private readonly IAnswerGenerationService _answerGenerationService;
+        private readonly IKnowledgeBaseService _knowledgeBaseService;
 
         private readonly double _minimumRerankScore;
 
-        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration)
+        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration, IKnowledgeBaseService knowledgeBaseService)
         {
             _vectorSearchService = vectorSearchService;
             _keywordSearchService = keywordSearchService;
@@ -25,14 +26,25 @@ namespace RagPipeline.API.Controllers
             _rerankedSearchService = rerankedSearchService;
             _answerGenerationService = answerGenerationService;
             _minimumRerankScore = configuration.GetValue<double>("Rag:MinimumRerankScore");
+            _knowledgeBaseService = knowledgeBaseService;
         }
 
         [HttpPost("vector")]
-        public async Task<ActionResult<VectorSearchResponse>> VectorSearch(VectorSearchRequest request, CancellationToken cancellationToken)
+        public async Task<ActionResult<VectorSearchResponse>> VectorSearch(VectorSearchRequest request, [FromHeader(Name = "X-User-Id")] string externalUserId, CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return BadRequest("X-User-Id header is required.");
+            }
+
             if (request.KnowledgeBaseId == Guid.Empty)
             {
                 return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return ForbiddenKnowledgeBase();
             }
 
             var result = await _vectorSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
@@ -41,11 +53,21 @@ namespace RagPipeline.API.Controllers
         }
 
         [HttpPost("keyword")]
-        public async Task<ActionResult<KeywordSearchResponse>> KeywordSearch(KeywordSearchRequest request, CancellationToken cancellationToken)
+        public async Task<ActionResult<KeywordSearchResponse>> KeywordSearch(KeywordSearchRequest request, [FromHeader(Name = "X-User-Id")] string externalUserId, CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return BadRequest("X-User-Id header is required.");
+            }
+
             if (request.KnowledgeBaseId == Guid.Empty)
             {
                 return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return ForbiddenKnowledgeBase();
             }
 
             var result = await _keywordSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
@@ -54,11 +76,21 @@ namespace RagPipeline.API.Controllers
         }
 
         [HttpPost("hybrid")]
-        public async Task<ActionResult<HybridSearchResponse>> HybridSearch(HybridSearchRequest request, CancellationToken cancellationToken)
+        public async Task<ActionResult<HybridSearchResponse>> HybridSearch(HybridSearchRequest request, [FromHeader(Name = "X-User-Id")] string externalUserId, CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return BadRequest("X-User-Id header is required.");
+            }
+
             if (request.KnowledgeBaseId == Guid.Empty)
             {
                 return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return ForbiddenKnowledgeBase();
             }
 
             var result = await _hybridSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
@@ -67,11 +99,21 @@ namespace RagPipeline.API.Controllers
         }
 
         [HttpPost("reranked")]
-        public async Task<ActionResult<RerankedSearchResponse>> RerankedSearch(HybridSearchRequest request, CancellationToken cancellationToken)
+        public async Task<ActionResult<RerankedSearchResponse>> RerankedSearch(HybridSearchRequest request, [FromHeader(Name = "X-User-Id")] string externalUserId, CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return BadRequest("X-User-Id header is required.");
+            }
+
             if (request.KnowledgeBaseId == Guid.Empty)
             {
                 return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return ForbiddenKnowledgeBase();
             }
 
             var result = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
@@ -80,11 +122,21 @@ namespace RagPipeline.API.Controllers
         }
 
         [HttpPost("ask")]
-        public async Task<ActionResult<AskResponse>> Ask(AskRequest request, CancellationToken cancellationToken)
+        public async Task<ActionResult<AskResponse>> Ask(AskRequest request, [FromHeader(Name = "X-User-Id")] string externalUserId, CancellationToken cancellationToken)
         {
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return BadRequest("X-User-Id header is required.");
+            }
+
             if (request.KnowledgeBaseId == Guid.Empty)
             {
                 return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return ForbiddenKnowledgeBase();
             }
 
             var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
@@ -168,6 +220,16 @@ namespace RagPipeline.API.Controllers
             }
 
             return true;
+        }
+
+        private async Task<bool> HasKnowledgeBaseAccessAsync(Guid knowledgeBaseId, string externalUserId, CancellationToken cancellationToken)
+        {
+            return await _knowledgeBaseService.HasAccessAsync(knowledgeBaseId, externalUserId, cancellationToken);
+        }
+
+        private ObjectResult ForbiddenKnowledgeBase()
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "You do not have access to this knowledge base." });
         }
     }
 }
