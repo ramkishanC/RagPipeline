@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc;
+using RagPipeline.Application.DTOs;
 using RagPipeline.Application.DTOs.Search;
 using RagPipeline.Application.Interfaces.Services;
 
@@ -14,10 +15,12 @@ namespace RagPipeline.API.Controllers
         private readonly IHybridSearchService _hybridSearchService;
         private readonly IRerankedSearchService _rerankedSearchService;
         private readonly IAnswerGenerationService _answerGenerationService;
+        private readonly IKnowledgeBaseService _knowledgeBaseService;
+        private readonly ICurrentUserService _currentUserService;
 
         private readonly double _minimumRerankScore;
 
-        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration)
+        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration, IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService)
         {
             _vectorSearchService = vectorSearchService;
             _keywordSearchService = keywordSearchService;
@@ -25,14 +28,34 @@ namespace RagPipeline.API.Controllers
             _rerankedSearchService = rerankedSearchService;
             _answerGenerationService = answerGenerationService;
             _minimumRerankScore = configuration.GetValue<double>("Rag:MinimumRerankScore");
+            _knowledgeBaseService = knowledgeBaseService;
+            _currentUserService = currentUserService;
         }
 
+        /// <summary>Searches vectors within a knowledge base owned by the current user.</summary>
+        /// <param name="request">The knowledge base, query, and result limit.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpPost("vector")]
+        [ProducesResponseType(typeof(VectorSearchResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<VectorSearchResponse>> VectorSearch(VectorSearchRequest request, CancellationToken cancellationToken)
         {
+            var externalUserId = _currentUserService.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return BadRequest("X-User-Id header is required.");
+            }
+
             if (request.KnowledgeBaseId == Guid.Empty)
             {
                 return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return ForbiddenKnowledgeBase();
             }
 
             var result = await _vectorSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
@@ -40,12 +63,30 @@ namespace RagPipeline.API.Controllers
             return Ok(result);
         }
 
+        /// <summary>Searches document text within a knowledge base owned by the current user.</summary>
+        /// <param name="request">The knowledge base, query, and result limit.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpPost("keyword")]
+        [ProducesResponseType(typeof(KeywordSearchResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<KeywordSearchResponse>> KeywordSearch(KeywordSearchRequest request, CancellationToken cancellationToken)
         {
+            var externalUserId = _currentUserService.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return BadRequest("X-User-Id header is required.");
+            }
+
             if (request.KnowledgeBaseId == Guid.Empty)
             {
                 return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return ForbiddenKnowledgeBase();
             }
 
             var result = await _keywordSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
@@ -53,26 +94,95 @@ namespace RagPipeline.API.Controllers
             return Ok(result);
         }
 
+        /// <summary>Combines vector and keyword results for a knowledge base owned by the current user.</summary>
+        /// <param name="request">The knowledge base, query, and result limit.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpPost("hybrid")]
+        [ProducesResponseType(typeof(HybridSearchResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<HybridSearchResponse>> HybridSearch(HybridSearchRequest request, CancellationToken cancellationToken)
         {
-            var result = await _hybridSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
+            var externalUserId = _currentUserService.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return BadRequest("X-User-Id header is required.");
+            }
+
+            if (request.KnowledgeBaseId == Guid.Empty)
+            {
+                return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return ForbiddenKnowledgeBase();
+            }
+
+            var result = await _hybridSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
 
             return Ok(result);
         }
 
+        /// <summary>Reranks hybrid results for a knowledge base owned by the current user.</summary>
+        /// <param name="request">The knowledge base, query, and result limit.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpPost("reranked")]
+        [ProducesResponseType(typeof(RerankedSearchResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<RerankedSearchResponse>> RerankedSearch(HybridSearchRequest request, CancellationToken cancellationToken)
         {
-            var result = await _rerankedSearchService.SearchAsync(request.Query, request.TopK, cancellationToken);
+            var externalUserId = _currentUserService.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return BadRequest("X-User-Id header is required.");
+            }
+
+            if (request.KnowledgeBaseId == Guid.Empty)
+            {
+                return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return ForbiddenKnowledgeBase();
+            }
+
+            var result = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
 
             return Ok(result);
         }
 
+        /// <summary>Generates a cited answer using documents from a knowledge base owned by the current user.</summary>
+        /// <param name="request">The knowledge base, question, and retrieval limit.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpPost("ask")]
+        [ProducesResponseType(typeof(AskResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<AskResponse>> Ask(AskRequest request, CancellationToken cancellationToken)
         {
-            var rerankedResult = await _rerankedSearchService.SearchAsync( request.Query, request.TopK, cancellationToken);
+            var externalUserId = _currentUserService.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return BadRequest("X-User-Id header is required.");
+            }
+
+            if (request.KnowledgeBaseId == Guid.Empty)
+            {
+                return BadRequest("KnowledgeBaseId is required.");
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return ForbiddenKnowledgeBase();
+            }
+
+            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
 
             var relevantResults = rerankedResult.Results
                 .Where(x => x.RerankScore >= _minimumRerankScore)
@@ -153,6 +263,16 @@ namespace RagPipeline.API.Controllers
             }
 
             return true;
+        }
+
+        private async Task<bool> HasKnowledgeBaseAccessAsync(Guid knowledgeBaseId, string externalUserId, CancellationToken cancellationToken)
+        {
+            return await _knowledgeBaseService.HasAccessAsync(knowledgeBaseId, externalUserId, cancellationToken);
+        }
+
+        private ObjectResult ForbiddenKnowledgeBase()
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse { Message = "You do not have access to this knowledge base." });
         }
     }
 }

@@ -16,29 +16,6 @@ namespace RagPipeline.Infrastructure.Repositories
             _dbContext = dbContext;
         }
 
-        public async Task<List<VectorSearchResult>> SearchAsync(float[] queryEmbedding, int topK, CancellationToken cancellationToken = default)
-        {
-            var queryVector = new Vector(queryEmbedding);
-
-            var results = await _dbContext.DocumentChunks
-                .AsNoTracking()
-                .Where(x => x.Embedding != null)
-                .OrderBy(x => x.Embedding!.CosineDistance(queryVector))
-                .Take(topK)
-                .Select(x => new VectorSearchResult
-                {
-                    DocumentId = x.DocumentId,
-                    FileName = x.Document.FileName,
-                    ChunkId = x.Id,
-                    ChunkIndex = x.ChunkIndex,
-                    Content = x.Content,
-                    Distance = x.Embedding!.CosineDistance(queryVector)
-                })
-                .ToListAsync(cancellationToken);
-
-            return results;
-        }
-
         public async Task<List<VectorSearchResult>> SearchAsync(Guid knowledgeBaseId, float[] queryEmbedding, int topK, CancellationToken cancellationToken = default)
         {
             var queryVector = new Vector(queryEmbedding);

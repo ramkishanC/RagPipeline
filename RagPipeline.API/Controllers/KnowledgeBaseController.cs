@@ -1,8 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using RagPipeline.Application.DTOs;
 using RagPipeline.Application.DTOs.KnowledgeBases;
-using RagPipeline.Domain.Entities;
-using RagPipeline.Infrastructure.Persistence;
+using RagPipeline.Application.Interfaces.Services;
 
 namespace RagPipeline.API.Controllers
 {
@@ -10,19 +9,28 @@ namespace RagPipeline.API.Controllers
     [Route("api/[controller]")]
     public class KnowledgeBaseController : ControllerBase
     {
-        private readonly RagDbContext _dbContext;
+        private readonly IKnowledgeBaseService _knowledgeBaseService;
+        private readonly ICurrentUserService _currentUserService;
 
-        public KnowledgeBaseController(RagDbContext dbContext)
+        public KnowledgeBaseController(IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService)
         {
-            _dbContext = dbContext;
+            _knowledgeBaseService = knowledgeBaseService;
+            _currentUserService = currentUserService;
         }
 
+        /// <summary>Creates a knowledge base owned by the current user.</summary>
+        /// <param name="request">The knowledge base name to create.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpPost]
-        public async Task<ActionResult<KnowledgeBaseResponse>> Create(CreateKnowledgeBaseRequest request, CancellationToken cancellationToken)
+        [ProducesResponseType(typeof(KnowledgeBaseResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<KnowledgeBaseResponse>> Create([FromBody] CreateKnowledgeBaseRequest request, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(request.ExternalUserId))
+            var externalUserId = _currentUserService.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(externalUserId))
             {
-                return BadRequest("ExternalUserId is required.");
+                return BadRequest("X-User-Id header is required.");
             }
 
             if (string.IsNullOrWhiteSpace(request.Name))
@@ -30,37 +38,36 @@ namespace RagPipeline.API.Controllers
                 return BadRequest("Knowledge base name is required.");
             }
 
-            var user = await _dbContext.RagUsers.FirstOrDefaultAsync(x => x.ExternalUserId == request.ExternalUserId, cancellationToken);
+            var knowledgeBase = await _knowledgeBaseService.CreateAsync(externalUserId, request.Name, cancellationToken);
+            return Ok(knowledgeBase);
+        }
 
-            if (user is null)
+        /// <summary>Checks whether the current user owns the requested knowledge base.</summary>
+        /// <param name="id">The knowledge base identifier.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
+        [HttpGet("{id:guid}/access")]
+        [ProducesResponseType(typeof(KnowledgeBaseAccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
+        public async Task<ActionResult<KnowledgeBaseAccessResponse>> CheckAccess(Guid id, CancellationToken cancellationToken)
+        {
+            var externalUserId = _currentUserService.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(externalUserId))
             {
-                user = new RagUser
-                {
-                    Id = Guid.NewGuid(),
-                    ExternalUserId = request.ExternalUserId,
-                    CreatedAt = DateTime.UtcNow
-                };
-
-                await _dbContext.RagUsers.AddAsync(user, cancellationToken);
+                return BadRequest("X-User-Id header is required.");
             }
 
-            var knowledgeBase = new KnowledgeBase
+            if (!await _knowledgeBaseService.HasAccessAsync(id, externalUserId, cancellationToken))
             {
-                Id = Guid.NewGuid(),
-                RagUserId = user.Id,
-                Name = request.Name.Trim(),
-                CreatedAt = DateTime.UtcNow
-            };
+                return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse { Message = "You do not have access to this knowledge base." });
+            }
 
-            await _dbContext.KnowledgeBases.AddAsync(knowledgeBase, cancellationToken);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-
-            return Ok(new KnowledgeBaseResponse
+            return Ok(new KnowledgeBaseAccessResponse
             {
-                Id = knowledgeBase.Id,
-                ExternalUserId = user.ExternalUserId,
-                Name = knowledgeBase.Name,
-                CreatedAt = knowledgeBase.CreatedAt
+                KnowledgeBaseId = id,
+                ExternalUserId = externalUserId,
+                Access = true
             });
         }
     }
