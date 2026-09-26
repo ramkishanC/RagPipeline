@@ -14,16 +14,16 @@ namespace RagPipeline.Application.Services
             _knowledgeBaseRepository = knowledgeBaseRepository;
         }
 
-        public async Task<KnowledgeBaseResponse> CreateAsync(CreateKnowledgeBaseRequest request, CancellationToken cancellationToken = default)
+        public async Task<KnowledgeBaseResponse> CreateAsync(string externalUserId, string name, CancellationToken cancellationToken = default)
         {
-            var user = await _knowledgeBaseRepository.GetRagUserByExternalUserIdAsync(request.ExternalUserId, cancellationToken);
+            var user = await _knowledgeBaseRepository.GetRagUserByExternalUserIdAsync(externalUserId, cancellationToken);
 
             if (user is null)
             {
                 user = new RagUser
                 {
                     Id = Guid.NewGuid(),
-                    ExternalUserId = request.ExternalUserId,
+                    ExternalUserId = externalUserId,
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -34,7 +34,7 @@ namespace RagPipeline.Application.Services
             {
                 Id = Guid.NewGuid(),
                 RagUserId = user.Id,
-                Name = request.Name.Trim(),
+                Name = name.Trim(),
                 CreatedAt = DateTime.UtcNow
             };
 

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using RagPipeline.Application.DTOs;
 using RagPipeline.Application.DTOs.KnowledgeBases;
 using RagPipeline.Application.Interfaces.Services;
 
@@ -9,18 +10,27 @@ namespace RagPipeline.API.Controllers
     public class KnowledgeBaseController : ControllerBase
     {
         private readonly IKnowledgeBaseService _knowledgeBaseService;
+        private readonly ICurrentUserService _currentUserService;
 
-        public KnowledgeBaseController(IKnowledgeBaseService knowledgeBaseService)
+        public KnowledgeBaseController(IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService)
         {
             _knowledgeBaseService = knowledgeBaseService;
+            _currentUserService = currentUserService;
         }
 
+        /// <summary>Creates a knowledge base owned by the current user.</summary>
+        /// <param name="request">The knowledge base name to create.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpPost]
-        public async Task<ActionResult<KnowledgeBaseResponse>> Create(CreateKnowledgeBaseRequest request, CancellationToken cancellationToken)
+        [ProducesResponseType(typeof(KnowledgeBaseResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        public async Task<ActionResult<KnowledgeBaseResponse>> Create([FromBody] CreateKnowledgeBaseRequest request, CancellationToken cancellationToken)
         {
-            if (string.IsNullOrWhiteSpace(request.ExternalUserId))
+            var externalUserId = _currentUserService.GetUserId();
+
+            if (string.IsNullOrWhiteSpace(externalUserId))
             {
-                return BadRequest("ExternalUserId is required.");
+                return BadRequest("X-User-Id header is required.");
             }
 
             if (string.IsNullOrWhiteSpace(request.Name))
@@ -28,13 +38,21 @@ namespace RagPipeline.API.Controllers
                 return BadRequest("Knowledge base name is required.");
             }
 
-            var knowledgeBase = await _knowledgeBaseService.CreateAsync(request, cancellationToken);
+            var knowledgeBase = await _knowledgeBaseService.CreateAsync(externalUserId, request.Name, cancellationToken);
             return Ok(knowledgeBase);
         }
 
+        /// <summary>Checks whether the current user owns the requested knowledge base.</summary>
+        /// <param name="id">The knowledge base identifier.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpGet("{id:guid}/access")]
-        public async Task<IActionResult> CheckAccess(Guid id, [FromHeader(Name = "X-User-Id")] string externalUserId, CancellationToken cancellationToken)
+        [ProducesResponseType(typeof(KnowledgeBaseAccessResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
+        public async Task<ActionResult<KnowledgeBaseAccessResponse>> CheckAccess(Guid id, CancellationToken cancellationToken)
         {
+            var externalUserId = _currentUserService.GetUserId();
+
             if (string.IsNullOrWhiteSpace(externalUserId))
             {
                 return BadRequest("X-User-Id header is required.");
@@ -42,18 +60,14 @@ namespace RagPipeline.API.Controllers
 
             if (!await _knowledgeBaseService.HasAccessAsync(id, externalUserId, cancellationToken))
             {
-                return StatusCode(StatusCodes.Status403Forbidden,
-                    new
-                    {
-                        message = "You do not have access to this knowledge base."
-                    });
+                return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse { Message = "You do not have access to this knowledge base." });
             }
 
-            return Ok(new
+            return Ok(new KnowledgeBaseAccessResponse
             {
-                knowledgeBaseId = id,
-                externalUserId,
-                access = true
+                KnowledgeBaseId = id,
+                ExternalUserId = externalUserId,
+                Access = true
             });
         }
     }

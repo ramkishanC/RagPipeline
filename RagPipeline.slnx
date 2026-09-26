@@ -2,6 +2,7 @@
   <Folder Name="/Solution Items/">
     <File Path="docker-compose.yml" />
   </Folder>
+  <Project Path="IntegrationTests/IntegrationTests.csproj" Id="b17b4d99-6e0a-4c62-bf70-148a4aa535af" />
   <Project Path="RagPipeline.API/RagPipeline.API.csproj" />
   <Project Path="RagPipeline.Application/RagPipeline.Application.csproj" />
   <Project Path="RagPipeline.Domain/RagPipeline.Domain.csproj" />

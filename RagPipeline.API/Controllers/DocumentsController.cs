@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using RagPipeline.Application.DTOs;
 using RagPipeline.Application.DTOs.Documents;
 using RagPipeline.Application.Interfaces.Services;
 
@@ -10,17 +11,28 @@ namespace RagPipeline.API.Controllers
     {
         private readonly IDocumentService _documentService;
         private readonly IKnowledgeBaseService _knowledgeBaseService;
+        private readonly ICurrentUserService _currentUserService;
 
-        public DocumentsController(IDocumentService documentService, IKnowledgeBaseService knowledgeBaseService)
+        public DocumentsController(IDocumentService documentService, IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService)
         {
             _documentService = documentService;
             _knowledgeBaseService = knowledgeBaseService;
+            _currentUserService = currentUserService;
         }
 
+        /// <summary>Uploads and indexes a document in a knowledge base owned by the current user.</summary>
+        /// <param name="knowledgeBaseId">The destination knowledge base identifier.</param>
+        /// <param name="file">The PDF, text, or Markdown file to upload.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpPost]
         [Consumes("multipart/form-data")]
-        public async Task<ActionResult<DocumentResponse>> Upload([FromQuery] Guid knowledgeBaseId, [FromHeader(Name = "X-User-Id")] string externalUserId, IFormFile file, CancellationToken cancellationToken)
+        [ProducesResponseType(typeof(DocumentResponse), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
+        public async Task<ActionResult<DocumentResponse>> Upload([FromQuery] Guid knowledgeBaseId, IFormFile file, CancellationToken cancellationToken)
         {
+            var externalUserId = _currentUserService.GetUserId();
+
             if (string.IsNullOrWhiteSpace(externalUserId))
             {
                 return BadRequest("X-User-Id header is required.");
@@ -61,9 +73,17 @@ namespace RagPipeline.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = document.Id }, document);
         }
 
+        /// <summary>Lists documents in a knowledge base owned by the current user.</summary>
+        /// <param name="knowledgeBaseId">The knowledge base identifier to list documents from.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpGet]
-        public async Task<ActionResult<List<DocumentResponse>>> GetAll([FromQuery] Guid knowledgeBaseId, [FromHeader(Name = "X-User-Id")] string externalUserId, CancellationToken cancellationToken)
+        [ProducesResponseType(typeof(List<DocumentResponse>), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
+        public async Task<ActionResult<List<DocumentResponse>>> GetAll([FromQuery] Guid knowledgeBaseId, CancellationToken cancellationToken)
         {
+            var externalUserId = _currentUserService.GetUserId();
+
             if (string.IsNullOrWhiteSpace(externalUserId))
             {
                 return BadRequest("X-User-Id header is required.");
@@ -83,9 +103,18 @@ namespace RagPipeline.API.Controllers
             return Ok(documents);
         }
 
+        /// <summary>Gets a document when it belongs to a knowledge base owned by the current user.</summary>
+        /// <param name="id">The document identifier.</param>
+        /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpGet("{id:guid}")]
-        public async Task<ActionResult<DocumentResponse>> GetById(Guid id, [FromHeader(Name = "X-User-Id")] string externalUserId, CancellationToken cancellationToken)
+        [ProducesResponseType(typeof(DocumentResponse), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<ActionResult<DocumentResponse>> GetById(Guid id, CancellationToken cancellationToken)
         {
+            var externalUserId = _currentUserService.GetUserId();
+
             if (string.IsNullOrWhiteSpace(externalUserId))
             {
                 return BadRequest("X-User-Id header is required.");
@@ -100,7 +129,7 @@ namespace RagPipeline.API.Controllers
 
             if (!await HasKnowledgeBaseAccessAsync(document.KnowledgeBaseId, externalUserId, cancellationToken))
             {
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You do not have access to this document." });
+                return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse { Message = "You do not have access to this document." });
             }
 
             return Ok(document);
@@ -113,7 +142,7 @@ namespace RagPipeline.API.Controllers
 
         private ObjectResult ForbiddenKnowledgeBase()
         {
-            return StatusCode(StatusCodes.Status403Forbidden, new { message = "You do not have access to this knowledge base." });
+            return StatusCode(StatusCodes.Status403Forbidden, new ApiErrorResponse { Message = "You do not have access to this knowledge base." });
         }
     }
 }

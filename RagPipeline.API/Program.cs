@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Reflection;
 using Pgvector.EntityFrameworkCore;
 using RagPipeline.Application.Interfaces.Repositories;
 using RagPipeline.Application.Interfaces.Services;
@@ -6,6 +7,8 @@ using RagPipeline.Application.Services;
 using RagPipeline.Infrastructure.Persistence;
 using RagPipeline.Infrastructure.Repositories;
 using RagPipeline.Infrastructure.Services;
+using RagPipeline.API.Services;
+using RagPipeline.API.Swagger;
 
 namespace RagPipeline.API
 {
@@ -18,8 +21,19 @@ namespace RagPipeline.API
             // Add services to the container.
 
             builder.Services.AddControllers();
+            builder.Services.AddHttpContextAccessor();
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
+            builder.Services.AddSwaggerGen(options =>
+            {
+                options.OperationFilter<CurrentUserHeaderOperationFilter>();
+                var xmlFile = $"{Assembly.GetExecutingAssembly().GetName().Name}.xml";
+                var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+
+                if (File.Exists(xmlPath))
+                {
+                    options.IncludeXmlComments(xmlPath, includeControllerXmlComments: true);
+                }
+            });
 
             builder.Services.AddDbContext<RagDbContext>(options =>
             {
@@ -36,6 +50,7 @@ namespace RagPipeline.API
             builder.Services.AddScoped<IKeywordSearchRepository, KeywordSearchRepository>();
             builder.Services.AddScoped<IKnowledgeBaseRepository, KnowledgeBaseRepository>();
             builder.Services.AddScoped<IKnowledgeBaseService, KnowledgeBaseService>();
+            builder.Services.AddScoped<ICurrentUserService, HeaderCurrentUserService>();
             builder.Services.AddScoped<IDocumentService, DocumentService>();
             builder.Services.AddScoped<ITextExtractionService, TextExtractionService>();
             builder.Services.AddScoped<IChunkingService, ChunkingService>();
