@@ -98,6 +98,26 @@ internal sealed class FakeKnowledgeBaseService : IKnowledgeBaseService
     {
         return Task.FromResult(_owners.TryGetValue(knowledgeBaseId, out var owner) && owner == externalUserId);
     }
+
+    public Task<List<KnowledgeBaseResponse>> GetAllAsync(string externalUserId, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(new List<KnowledgeBaseResponse>());
+    }
+
+    public Task<KnowledgeBaseResponse?> GetByIdAsync(Guid id, string externalUserId, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<KnowledgeBaseResponse?>(null);
+    }
+
+    public Task<KnowledgeBaseResponse?> UpdateAsync(Guid id, string externalUserId, UpdateKnowledgeBaseRequest request, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<KnowledgeBaseResponse?>(null);
+    }
+
+    public Task<bool> DeleteAsync(Guid id, string externalUserId, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(true);
+    }
 }
 
 internal sealed class FakeDocumentService : IDocumentService
@@ -120,5 +140,10 @@ internal sealed class FakeDocumentService : IDocumentService
     public Task<List<DocumentResponse>> GetAllAsync(Guid knowledgeBaseId, CancellationToken cancellationToken = default)
     {
         return Task.FromResult(new List<DocumentResponse>());
+    }
+
+    public Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(id == Guid.Parse("22222222-2222-2222-2222-222222222222"));
     }
 }

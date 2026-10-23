@@ -72,5 +72,80 @@ namespace RagPipeline.API.Controllers
                 Access = true
             });
         }
+
+        [HttpGet]
+        public async Task<ActionResult<List<KnowledgeBaseResponse>>> GetAll(CancellationToken cancellationToken)
+        {
+            var externalUserId = _currentUserService.GetUserId();
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return Unauthorized("A valid user token is required.");
+            }
+
+            var knowledgeBases = await _knowledgeBaseService.GetAllAsync(externalUserId, cancellationToken);
+            return Ok(knowledgeBases);
+        }
+
+        [HttpGet("{id:guid}")]
+        public async Task<ActionResult<KnowledgeBaseResponse>> GetById(Guid id, CancellationToken cancellationToken)
+        {
+            var externalUserId = _currentUserService.GetUserId();
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return Unauthorized("A valid user token is required.");
+            }
+
+            var knowledgeBase = await _knowledgeBaseService.GetByIdAsync(id, externalUserId, cancellationToken);
+
+            if (knowledgeBase is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(knowledgeBase);
+        }
+
+        [HttpPut("{id:guid}")]
+        public async Task<ActionResult<KnowledgeBaseResponse>> Update(Guid id, [FromBody] UpdateKnowledgeBaseRequest request, CancellationToken cancellationToken)
+        {
+            var externalUserId = _currentUserService.GetUserId();
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return Unauthorized("A valid user token is required.");
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Name))
+            {
+                return BadRequest("Knowledge base name is required.");
+            }
+
+            var knowledgeBase = await _knowledgeBaseService.UpdateAsync(id, externalUserId, request, cancellationToken);
+
+            if (knowledgeBase is null)
+            {
+                return NotFound();
+            }
+
+            return Ok(knowledgeBase);
+        }
+
+        [HttpDelete("{id:guid}")]
+        public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+        {
+            var externalUserId = _currentUserService.GetUserId();
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return Unauthorized("A valid user token is required.");
+            }
+
+            var deleted = await _knowledgeBaseService.DeleteAsync(id, externalUserId, cancellationToken);
+
+            if (!deleted)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
     }
 }

@@ -107,6 +107,19 @@ namespace RagPipeline.Application.Services
             return documents.Select(Map).ToList();
         }
 
+        public async Task<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default)
+        {
+            // We need the tracking entity to remove it
+            var document = await _documentRepository.GetByIdAsync(id, cancellationToken);
+            if (document is null)
+            {
+                return false;
+            }
+
+            await _documentRepository.DeleteAsync(document, cancellationToken);
+            return true;
+        }
+
         private static DocumentResponse Map(Document document)
         {
             return new DocumentResponse

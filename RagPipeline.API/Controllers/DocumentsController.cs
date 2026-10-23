@@ -137,6 +137,37 @@ namespace RagPipeline.API.Controllers
             return Ok(document);
         }
 
+        [HttpDelete("{id:guid}")]
+        public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+        {
+            var externalUserId = _currentUserService.GetUserId();
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return Unauthorized("A valid user token is required.");
+            }
+
+            var document = await _documentService.GetByIdAsync(id, cancellationToken);
+            if (document is null)
+            {
+                return NotFound();
+            }
+
+            // Enforce ownership: You cannot delete a document if you don't own the KB it belongs to
+            if (!await HasKnowledgeBaseAccessAsync(document.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You do not have access to this document." });
+            }
+
+            var deleted = await _documentService.DeleteAsync(id, cancellationToken);
+
+            if (!deleted)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+
         private async Task<bool> HasKnowledgeBaseAccessAsync(Guid knowledgeBaseId, string externalUserId, CancellationToken cancellationToken)
         {
             return await _knowledgeBaseService.HasAccessAsync(knowledgeBaseId, externalUserId, cancellationToken);

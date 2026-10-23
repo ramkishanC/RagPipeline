@@ -34,5 +34,11 @@ namespace RagPipeline.Infrastructure.Repositories
         {
             return await _dbContext.KnowledgeBases.AsNoTracking().AnyAsync(x => x.Id == knowledgeBaseId, cancellationToken);
         }
+
+        public async Task DeleteAsync(Document document, CancellationToken cancellationToken = default)
+        {
+            _dbContext.Documents.Remove(document);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 }
