@@ -25,6 +25,10 @@ namespace RagPipeline.Domain.Entities
 
         public string LocalFilePath { get; set; } = string.Empty;
 
+        public string? Category { get; set; }
+
+        public List<string> Tags { get; set; } = new();
+
         public KnowledgeBase KnowledgeBase { get; set; } = null!;
 
         public ICollection<DocumentChunk> Chunks { get; set; } = new List<DocumentChunk>();

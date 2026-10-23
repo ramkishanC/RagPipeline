@@ -16,13 +16,28 @@ namespace RagPipeline.Infrastructure.Repositories
             _dbContext = dbContext;
         }
 
-        public async Task<List<VectorSearchResult>> SearchAsync(Guid knowledgeBaseId, float[] queryEmbedding, int topK, CancellationToken cancellationToken = default)
+        public async Task<List<VectorSearchResult>> SearchAsync(Guid knowledgeBaseId, float[] queryEmbedding, int topK, string? category = null, List<string>? tags = null, CancellationToken cancellationToken = default)
         {
             var queryVector = new Vector(queryEmbedding);
 
-            var results = await _dbContext.DocumentChunks
+            var queryable = _dbContext.DocumentChunks
                 .AsNoTracking()
-                .Where(x => x.Document.KnowledgeBaseId == knowledgeBaseId && x.Embedding != null)
+                .Where(x => x.Document.KnowledgeBaseId == knowledgeBaseId && x.Embedding != null);
+
+            if (!string.IsNullOrWhiteSpace(category))
+            {
+                queryable = queryable.Where(x => x.Document.Category == category);
+            }
+
+            if (tags != null && tags.Count > 0)
+            {
+                foreach (var tag in tags)
+                {
+                    queryable = queryable.Where(x => x.Document.Tags.Contains(tag));
+                }
+            }
+
+            var results = await queryable
                 .OrderBy(x => x.Embedding!.CosineDistance(queryVector))
                 .Take(topK)
                 .Select(x => new VectorSearchResult

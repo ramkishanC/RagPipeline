@@ -122,9 +122,14 @@ internal sealed class FakeKnowledgeBaseService : IKnowledgeBaseService
 
 internal sealed class FakeDocumentService : IDocumentService
 {
-    public Task<DocumentResponse> UploadAsync(Guid knowledgeBaseId, Stream stream, string fileName, string contentType, long fileSize, CancellationToken cancellationToken = default)
+    public Task<DocumentResponse> UploadAsync(Guid knowledgeBaseId, Stream stream, string fileName, string contentType, long fileSize, string? category = null, List<string>? tags = null, CancellationToken cancellationToken = default)
     {
         throw new NotImplementedException();
+    }
+
+    public Task ProcessDocumentAsync(Guid documentId, CancellationToken cancellationToken = default)
+    {
+        return Task.CompletedTask;
     }
 
     public Task<DocumentResponse?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)

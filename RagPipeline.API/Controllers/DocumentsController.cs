@@ -29,13 +29,20 @@ namespace RagPipeline.API.Controllers
         /// <summary>Uploads and queues a document for indexing in a knowledge base owned by the current user.</summary>
         /// <param name="knowledgeBaseId">The destination knowledge base identifier.</param>
         /// <param name="file">The PDF, text, or Markdown file to upload.</param>
+        /// <param name="category">Optional category to tag the document with.</param>
+        /// <param name="tags">Optional list of tags.</param>
         /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpPost]
         [Consumes("multipart/form-data")]
         [ProducesResponseType(typeof(DocumentResponse), StatusCodes.Status202Accepted)]
         [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
-        public async Task<ActionResult<DocumentResponse>> Upload([FromQuery] Guid knowledgeBaseId, IFormFile file, CancellationToken cancellationToken)
+        public async Task<ActionResult<DocumentResponse>> Upload(
+            [FromQuery] Guid knowledgeBaseId,
+            IFormFile file,
+            [FromForm] string? category,
+            [FromForm] List<string>? tags,
+            CancellationToken cancellationToken)
         {
             var externalUserId = _currentUserService.GetUserId();
 
@@ -75,8 +82,16 @@ namespace RagPipeline.API.Controllers
 
             await using var stream = file.OpenReadStream();
 
-            // Saves to database as 'Pending' and writes file to local disk
-            var document = await _documentService.UploadAsync(knowledgeBaseId, stream, file.FileName, file.ContentType, file.Length, cancellationToken);
+            // Saves to database as 'Pending' and writes file to local disk (now passing category and tags)
+            var document = await _documentService.UploadAsync(
+                knowledgeBaseId,
+                stream,
+                file.FileName,
+                file.ContentType,
+                file.Length,
+                category,
+                tags,
+                cancellationToken);
 
             // Publish event to RabbitMQ for background worker processing
             await _publishEndpoint.Publish(new DocumentUploadedEvent

@@ -10,5 +10,7 @@ namespace RagPipeline.Application.DTOs.Documents
         public DateTime CreatedAt { get; set; }
         public string Status { get; set; } = string.Empty;
         public string? ErrorMessage { get; set; }
+        public string? Category { get; set; }
+        public List<string> Tags { get; set; } = new();
     }
 }

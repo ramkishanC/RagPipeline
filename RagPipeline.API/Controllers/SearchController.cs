@@ -60,8 +60,7 @@ namespace RagPipeline.API.Controllers
                 return ForbiddenKnowledgeBase();
             }
 
-            var result = await _vectorSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
-
+            var result = await _vectorSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, request.Category, request.Tags, cancellationToken);
             return Ok(result);
         }
 
@@ -91,8 +90,7 @@ namespace RagPipeline.API.Controllers
                 return ForbiddenKnowledgeBase();
             }
 
-            var result = await _keywordSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
-
+            var result = await _keywordSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, request.Category, request.Tags, cancellationToken);
             return Ok(result);
         }
 
@@ -122,8 +120,7 @@ namespace RagPipeline.API.Controllers
                 return ForbiddenKnowledgeBase();
             }
 
-            var result = await _hybridSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
-
+            var result = await _hybridSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, request.Category, request.Tags, cancellationToken);
             return Ok(result);
         }
 
@@ -153,7 +150,7 @@ namespace RagPipeline.API.Controllers
                 return ForbiddenKnowledgeBase();
             }
 
-            var result = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
+            var result = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, request.Category, request.Tags, cancellationToken);
 
             return Ok(result);
         }
@@ -184,7 +181,7 @@ namespace RagPipeline.API.Controllers
                 return ForbiddenKnowledgeBase();
             }
 
-            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, cancellationToken);
+            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, request.Category, request.Tags, cancellationToken);
 
             var relevantResults = rerankedResult.Results
                 .Where(x => x.RerankScore >= _minimumRerankScore)

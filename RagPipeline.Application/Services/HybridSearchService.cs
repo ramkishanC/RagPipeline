@@ -16,7 +16,7 @@ public class HybridSearchService : IHybridSearchService
         _keywordSearchService = keywordSearchService;
     }
 
-    public async Task<HybridSearchResponse> SearchAsync(Guid knowledgeBaseId, string query, int topK = 5, CancellationToken cancellationToken = default)
+    public async Task<HybridSearchResponse> SearchAsync(Guid knowledgeBaseId, string query, int topK = 5, string? category = null, List<string>? tags = null, CancellationToken cancellationToken = default)
     {
         if (knowledgeBaseId == Guid.Empty)
         {
@@ -36,8 +36,8 @@ public class HybridSearchService : IHybridSearchService
         topK = Math.Min(topK, 20);
 
         var candidateK = Math.Min(Math.Max(topK * 4, 20), 50);
-        var vectorResponse = await _vectorSearchService.SearchAsync(knowledgeBaseId, query, candidateK, cancellationToken);
-        var keywordResponse = await _keywordSearchService.SearchAsync(knowledgeBaseId, query, candidateK, cancellationToken);
+        var vectorResponse = await _vectorSearchService.SearchAsync(knowledgeBaseId, query, candidateK, category, tags, cancellationToken); 
+        var keywordResponse = await _keywordSearchService.SearchAsync(knowledgeBaseId, query, candidateK, category, tags, cancellationToken);
         var fused = new Dictionary<Guid, HybridSearchResult>();
 
         for (var i = 0; i < vectorResponse.Results.Count; i++)

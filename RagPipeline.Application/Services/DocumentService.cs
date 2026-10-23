@@ -25,7 +25,7 @@ namespace RagPipeline.Application.Services
             _embeddingService = embeddingService;
         }
 
-        public async Task<DocumentResponse> UploadAsync(Guid knowledgeBaseId, Stream stream, string fileName, string contentType, long fileSize, CancellationToken cancellationToken = default)
+        public async Task<DocumentResponse> UploadAsync(Guid knowledgeBaseId, Stream stream, string fileName, string contentType, long fileSize, string? category = null, List<string>? tags = null, CancellationToken cancellationToken = default)
         {
             var knowledgeBaseExists = await _documentRepository.KnowledgeBaseExistsAsync(knowledgeBaseId, cancellationToken);
             if (!knowledgeBaseExists)
@@ -51,6 +51,8 @@ namespace RagPipeline.Application.Services
                 FileSize = fileSize,
                 LocalFilePath = localFilePath,
                 Status = Domain.Enums.DocumentStatus.Pending,
+                Category = category,
+                Tags = tags ?? new List<string>(),
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -146,7 +148,11 @@ namespace RagPipeline.Application.Services
                 FileName = document.FileName,
                 ContentType = document.ContentType,
                 FileSize = document.FileSize,
-                CreatedAt = document.CreatedAt
+                CreatedAt = document.CreatedAt,
+                Status = document.Status.ToString(),
+                ErrorMessage = document.ErrorMessage,
+                Category = document.Category,
+                Tags = document.Tags
             };
         }
     }
