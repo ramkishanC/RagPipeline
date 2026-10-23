@@ -40,5 +40,23 @@ namespace RagPipeline.Infrastructure.Repositories
             _dbContext.Documents.Remove(document);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
+
+        public async Task UpdateAsync(Document document, CancellationToken cancellationToken = default)
+        {
+            // 1. Calling Update forces the Document and all its Chunks to be marked as 'Modified'
+            _dbContext.Documents.Update(document);
+
+            // 2. We must override the state of the chunks to 'Added' so EF Core executes
+            // INSERT statements instead of UPDATE statements, preventing the Concurrency Exception.
+            if (document.Chunks != null && document.Chunks.Count > 0)
+            {
+                foreach (var chunk in document.Chunks)
+                {
+                    _dbContext.Entry(chunk).State = EntityState.Added;
+                }
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 }

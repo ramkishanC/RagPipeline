@@ -39,6 +39,9 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
                     b.Property<string>("FileName")
                         .IsRequired()
                         .HasMaxLength(500)
@@ -49,6 +52,13 @@ namespace RagPipeline.Infrastructure.Migrations
 
                     b.Property<Guid>("KnowledgeBaseId")
                         .HasColumnType("uuid");
+
+                    b.Property<string>("LocalFilePath")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 

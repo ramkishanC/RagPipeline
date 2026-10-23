@@ -39,8 +39,21 @@ services:
     volumes:
       - rag_reranker_models:/models
 
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rag-rabbitmq
+    ports:
+      - "5672:5672"   # AMQP protocol port (MassTransit uses this to connect)
+      - "15672:15672" # Management UI port (You use this to view the queues)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rag_rabbitmq_data:/var/lib/rabbitmq
+
 
 volumes:
   rag_postgres_data:
   rag_ollama_data:
   rag_reranker_models:
+  rag_rabbitmq_data:

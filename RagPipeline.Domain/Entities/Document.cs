@@ -1,4 +1,5 @@
-﻿using System;
+﻿using RagPipeline.Domain.Enums;
+using System;
 using System.Collections.Generic;
 using System.Text;
 
@@ -17,6 +18,12 @@ namespace RagPipeline.Domain.Entities
         public long FileSize { get; set; }
 
         public DateTime CreatedAt { get; set; }
+
+        public DocumentStatus Status { get; set; } = DocumentStatus.Pending;
+
+        public string? ErrorMessage { get; set; }
+
+        public string LocalFilePath { get; set; } = string.Empty;
 
         public KnowledgeBase KnowledgeBase { get; set; } = null!;
 

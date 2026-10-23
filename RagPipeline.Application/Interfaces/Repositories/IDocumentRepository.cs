@@ -9,5 +9,6 @@ namespace RagPipeline.Application.Interfaces.Repositories
         Task<List<Document>> GetAllByKnowledgeBaseIdAsync(Guid knowledgeBaseId, CancellationToken cancellationToken = default);
         Task<bool> KnowledgeBaseExistsAsync(Guid knowledgeBaseId, CancellationToken cancellationToken = default);
         Task DeleteAsync(Document document, CancellationToken cancellationToken = default);
+        Task UpdateAsync(Document document, CancellationToken cancellationToken = default);
     }
 }

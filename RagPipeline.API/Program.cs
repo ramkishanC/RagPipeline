@@ -1,3 +1,4 @@
+using MassTransit;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -113,6 +114,22 @@ namespace RagPipeline.API
                         ClockSkew = TimeSpan.Zero
                     };
                 });
+
+            builder.Services.AddMassTransit(x =>
+            {
+                x.AddConsumer<RagPipeline.Infrastructure.Consumers.DocumentIngestionConsumer>();
+
+                x.UsingRabbitMq((context, cfg) =>
+                {
+                    cfg.Host(builder.Configuration["RabbitMQ:Host"], "/", h =>
+                    {
+                        h.Username(builder.Configuration["RabbitMQ:Username"]);
+                        h.Password(builder.Configuration["RabbitMQ:Password"]);
+                    });
+
+                    cfg.ConfigureEndpoints(context);
+                });
+            });
 
             var app = builder.Build();
 

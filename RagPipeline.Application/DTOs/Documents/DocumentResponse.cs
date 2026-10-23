@@ -8,5 +8,7 @@ namespace RagPipeline.Application.DTOs.Documents
         public string ContentType { get; set; } = string.Empty;
         public long FileSize { get; set; }
         public DateTime CreatedAt { get; set; }
+        public string Status { get; set; } = string.Empty;
+        public string? ErrorMessage { get; set; }
     }
 }
