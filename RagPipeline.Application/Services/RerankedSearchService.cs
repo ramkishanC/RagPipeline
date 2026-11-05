@@ -14,7 +14,15 @@ public class RerankedSearchService : IRerankedSearchService
         _rerankerService = rerankerService;
     }
 
-    public async Task<RerankedSearchResponse> SearchAsync(Guid knowledgeBaseId, string query, int topK = 5, string? category = null, List<string>? tags = null, CancellationToken cancellationToken = default)
+    public async Task<RerankedSearchResponse> SearchAsync(
+        Guid knowledgeBaseId,
+        string query,
+        int topK = 5,
+        string? category = null,
+        List<string>? tags = null,
+        double vectorWeight = 1.0,
+        double keywordWeight = 1.0,
+        CancellationToken cancellationToken = default)
     {
         if (knowledgeBaseId == Guid.Empty)
         {
@@ -30,7 +38,7 @@ public class RerankedSearchService : IRerankedSearchService
 
         const int candidateCount = 20;
 
-        var hybrid = await _hybridSearchService.SearchAsync(knowledgeBaseId, query, candidateCount, category, tags, cancellationToken); 
+        var hybrid = await _hybridSearchService.SearchAsync(knowledgeBaseId, query, candidateCount, category, tags, vectorWeight, keywordWeight, cancellationToken);
         var candidates = hybrid.Results.Select(x => new RerankCandidate
         {
             ChunkId = x.ChunkId,

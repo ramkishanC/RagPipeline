@@ -17,5 +17,11 @@ namespace RagPipeline.Application.DTOs.Search
         public string? Category { get; set; }
 
         public List<string>? Tags { get; set; }
+
+        public double VectorWeight { get; set; } = 1.0;
+
+        public double KeywordWeight { get; set; } = 1.0;
+
+        public int ContextWindowSize { get; set; } = 1;
     }
 }

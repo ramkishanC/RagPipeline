@@ -23,10 +23,11 @@ namespace RagPipeline.API.Controllers
         private readonly ICurrentUserService _currentUserService;
         private readonly IConversationService _conversationService;
         private readonly IQueryRewritingService _queryRewritingService;
+        private readonly IContextExpansionService _contextExpansionService;
 
         private readonly double _minimumRerankScore;
 
-        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration, IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService, IConversationService conversationService, IQueryRewritingService queryRewritingService)
+        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration, IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService, IConversationService conversationService, IQueryRewritingService queryRewritingService, IContextExpansionService contextExpansionService)
         {
             _vectorSearchService = vectorSearchService;
             _keywordSearchService = keywordSearchService;
@@ -38,6 +39,7 @@ namespace RagPipeline.API.Controllers
             _currentUserService = currentUserService;
             _conversationService = conversationService;
             _queryRewritingService = queryRewritingService;
+            _contextExpansionService = contextExpansionService;
         }
 
         /// <summary>Searches vectors within a knowledge base owned by the current user.</summary>
@@ -126,7 +128,7 @@ namespace RagPipeline.API.Controllers
                 return ForbiddenKnowledgeBase();
             }
 
-            var result = await _hybridSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, request.Category, request.Tags, cancellationToken);
+            var result = await _hybridSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, request.Category, request.Tags, request.VectorWeight, request.KeywordWeight, cancellationToken);
             return Ok(result);
         }
 
@@ -156,7 +158,7 @@ namespace RagPipeline.API.Controllers
                 return ForbiddenKnowledgeBase();
             }
 
-            var result = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, request.Category, request.Tags, cancellationToken);
+            var result = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, request.Category, request.Tags, request.VectorWeight, request.KeywordWeight, cancellationToken);
 
             return Ok(result);
         }
@@ -220,7 +222,7 @@ namespace RagPipeline.API.Controllers
             var standaloneQuery = await _queryRewritingService.RewriteQueryAsync(request.Query, history, cancellationToken);
 
             // 5. Execute RAG Retrieval using the standalone rewritten query
-            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, standaloneQuery, request.TopK, request.Category, request.Tags, cancellationToken);
+            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, standaloneQuery, request.TopK, request.Category, request.Tags, request.VectorWeight, request.KeywordWeight, cancellationToken);
 
             var relevantResults = rerankedResult.Results
                 .Where(x => x.RerankScore >= _minimumRerankScore)
@@ -259,9 +261,10 @@ namespace RagPipeline.API.Controllers
                 })
                 .ToList();
 
-            var context = relevantResults
-                .Select((x, index) => $"[{index + 1}] {x.Content}")
-                .ToList();
+            var context = await _contextExpansionService.BuildExpandedContextAsync(
+                relevantResults,
+                request.ContextWindowSize,
+                cancellationToken);
 
             // 8. Generate Answer via Ollama (passing history)
             var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, history, cancellationToken);
@@ -376,7 +379,7 @@ namespace RagPipeline.API.Controllers
             await Response.Body.FlushAsync(cancellationToken);
 
             // 4. RAG Retrieval using the standalone rewritten query
-            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, standaloneQuery, request.TopK, request.Category, request.Tags, cancellationToken);
+            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, standaloneQuery, request.TopK, request.Category, request.Tags, request.VectorWeight, request.KeywordWeight, cancellationToken);
             var relevantResults = rerankedResult.Results.Where(x => x.RerankScore >= _minimumRerankScore).ToList();
 
             if (relevantResults.Count == 0)
@@ -403,7 +406,10 @@ namespace RagPipeline.API.Controllers
                 Content = x.Content
             }).ToList();
 
-            var context = relevantResults.Select((x, index) => $"[{index + 1}] {x.Content}").ToList();
+            var context = await _contextExpansionService.BuildExpandedContextAsync(
+                relevantResults,
+                request.ContextWindowSize,
+                cancellationToken);
 
             // 6. Execute Streaming
             var stream = _answerGenerationService.GenerateStreamedAnswerAsync(request.Query, context, history, cancellationToken);

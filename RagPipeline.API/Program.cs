@@ -80,6 +80,7 @@ namespace RagPipeline.API
             builder.Services.AddScoped<IKeywordSearchService, KeywordSearchService>();
             builder.Services.AddScoped<IHybridSearchService, HybridSearchService>();
             builder.Services.AddScoped<IRerankedSearchService, RerankedSearchService>();
+            builder.Services.AddScoped<IContextExpansionService, ContextExpansionService>();
             builder.Services.AddScoped<IConversationService, ConversationService>();
             builder.Services.AddScoped<IRagEvaluationService, RagEvaluationService>();
             builder.Services.AddScoped<IFeedbackService, FeedbackService>();

@@ -39,13 +39,7 @@ namespace RagPipeline.Application.Services
                     continue;
                 }
 
-                var reranked = await _rerankedSearchService.SearchAsync(
-                    request.KnowledgeBaseId,
-                    testCase.Question,
-                    request.TopK,
-                    testCase.Category,
-                    testCase.Tags,
-                    cancellationToken);
+                var reranked = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, testCase.Question, request.TopK, testCase.Category, testCase.Tags, cancellationToken: cancellationToken);
 
                 var relevantResults = reranked.Results
                     .Where(x => x.RerankScore >= minScore)

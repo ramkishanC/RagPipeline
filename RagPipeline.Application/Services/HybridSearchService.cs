@@ -16,7 +16,15 @@ public class HybridSearchService : IHybridSearchService
         _keywordSearchService = keywordSearchService;
     }
 
-    public async Task<HybridSearchResponse> SearchAsync(Guid knowledgeBaseId, string query, int topK = 5, string? category = null, List<string>? tags = null, CancellationToken cancellationToken = default)
+    public async Task<HybridSearchResponse> SearchAsync(
+        Guid knowledgeBaseId,
+        string query,
+        int topK = 5,
+        string? category = null,
+        List<string>? tags = null,
+        double vectorWeight = 1.0,
+        double keywordWeight = 1.0,
+        CancellationToken cancellationToken = default)
     {
         if (knowledgeBaseId == Guid.Empty)
         {
@@ -33,6 +41,9 @@ public class HybridSearchService : IHybridSearchService
             throw new ArgumentOutOfRangeException(nameof(topK));
         }
 
+        vectorWeight = Math.Clamp(vectorWeight, 0.0, 5.0);
+        keywordWeight = Math.Clamp(keywordWeight, 0.0, 5.0);
+
         topK = Math.Min(topK, 20);
 
         var candidateK = Math.Min(Math.Max(topK * 4, 20), 50);
@@ -44,7 +55,7 @@ public class HybridSearchService : IHybridSearchService
         {
             var result = vectorResponse.Results[i];
             var rank = i + 1;
-            var rrfContribution = 1.0 / (RrfK + rank);
+            var rrfContribution = vectorWeight / (RrfK + rank);
 
             fused[result.ChunkId] = new HybridSearchResult
             {
@@ -63,7 +74,7 @@ public class HybridSearchService : IHybridSearchService
         {
             var result = keywordResponse.Results[i];
             var rank = i + 1;
-            var rrfContribution = 1.0 / (RrfK + rank);
+            var rrfContribution = keywordWeight / (RrfK + rank);
 
             if (fused.TryGetValue(result.ChunkId, out var existing))
             {
