@@ -79,6 +79,7 @@ namespace RagPipeline.API
             builder.Services.AddScoped<IKeywordSearchService, KeywordSearchService>();
             builder.Services.AddScoped<IHybridSearchService, HybridSearchService>();
             builder.Services.AddScoped<IRerankedSearchService, RerankedSearchService>();
+            builder.Services.AddScoped<IConversationService, ConversationService>();
             builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>(client =>
             {
                 var baseUrl = builder.Configuration["Ollama:BaseUrl"] ?? throw new InvalidOperationException("Ollama BaseUrl is missing.");
@@ -99,6 +100,13 @@ namespace RagPipeline.API
 
                 client.BaseAddress = new Uri(baseUrl);
                 client.Timeout = TimeSpan.FromMinutes(5);
+            });
+            builder.Services.AddHttpClient<IQueryRewritingService, OllamaQueryRewritingService>(client =>
+            {
+                var baseUrl = builder.Configuration["Ollama:BaseUrl"] ?? throw new InvalidOperationException("Ollama BaseUrl is missing.");
+
+                client.BaseAddress = new Uri(baseUrl);
+                client.Timeout = TimeSpan.FromMinutes(2);
             });
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 .AddJwtBearer(options =>

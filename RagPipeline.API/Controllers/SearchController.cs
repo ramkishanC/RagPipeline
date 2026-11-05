@@ -182,6 +182,11 @@ namespace RagPipeline.API.Controllers
                 return BadRequest("KnowledgeBaseId is required.");
             }
 
+            if (string.IsNullOrWhiteSpace(request.Query))
+            {
+                return BadRequest("Query is required.");
+            }
+
             if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
             {
                 return ForbiddenKnowledgeBase();
@@ -244,6 +249,7 @@ namespace RagPipeline.API.Controllers
                 .Select((x, index) => new AskSource
                 {
                     Citation = $"[{index + 1}]",
+                    DocumentId = x.DocumentId,
                     FileName = x.FileName,
                     ChunkId = x.ChunkId,
                     ChunkIndex = x.ChunkIndex,
@@ -259,21 +265,26 @@ namespace RagPipeline.API.Controllers
             // 8. Generate Answer via Ollama (passing history)
             var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, history, cancellationToken);
 
-            // 9. Save AI Response to DB with serialized Citations via Service Layer
-            await _conversationService.AddMessageAsync(currentConversationId, "assistant", answer, JsonSerializer.Serialize(sources), cancellationToken);
-
-            // 10. Final Validation
+            // 9. Validate & Mark Cited Sources
             if (!HasValidCitations(answer, sources.Count))
             {
+                var fallbackAnswer = "I could not verify the generated answer against the retrieved sources.";
+                await _conversationService.AddMessageAsync(currentConversationId, "assistant", fallbackAnswer, JsonSerializer.Serialize(sources), cancellationToken);
+
                 return Ok(new AskResponse
                 {
                     ConversationId = currentConversationId,
                     Query = request.Query,
                     RewrittenQuery = standaloneQuery,
-                    Answer = "I could not verify the generated answer against the retrieved sources.",
+                    Answer = fallbackAnswer,
                     Sources = sources
                 });
             }
+
+            MarkCitedSources(answer, sources);
+
+            // 10. Save AI Response to DB with serialized Citations via Service Layer
+            await _conversationService.AddMessageAsync(currentConversationId, "assistant", answer, JsonSerializer.Serialize(sources), cancellationToken);
 
             return Ok(new AskResponse
             {
@@ -303,30 +314,33 @@ namespace RagPipeline.API.Controllers
             if (request.KnowledgeBaseId == Guid.Empty)
             {
                 Response.StatusCode = 400;
-                await Response.WriteAsync("KnowledgeBaseId is required.");
+                await Response.WriteAsync("KnowledgeBaseId is required.", cancellationToken);
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(request.Query))
+            {
+                Response.StatusCode = 400;
+                await Response.WriteAsync("Query is required.", cancellationToken);
                 return;
             }
 
             if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
             {
                 Response.StatusCode = 403;
-                await Response.WriteAsJsonAsync(new ApiErrorResponse { Message = "You do not have access to this knowledge base." });
+                await Response.WriteAsJsonAsync(new ApiErrorResponse { Message = "You do not have access to this knowledge base." }, cancellationToken);
                 return;
             }
 
-            // 1. Setup SSE Headers
-            Response.Headers.Append("Content-Type", "text/event-stream");
-            Response.Headers.Append("Cache-Control", "no-cache");
-            Response.Headers.Append("Connection", "keep-alive");
-
-            // 2. Resolve/Create Conversation
+            // 1. Resolve/Create Conversation BEFORE starting SSE stream so invalid IDs return 400
             Guid currentConversationId;
             if (request.ConversationId.HasValue && request.ConversationId.Value != Guid.Empty)
             {
                 var conversation = await _conversationService.GetByIdAsync(request.ConversationId.Value, cancellationToken);
                 if (conversation == null || conversation.KnowledgeBaseId != request.KnowledgeBaseId)
                 {
-                    await SendSseErrorAsync("Invalid ConversationId.");
+                    Response.StatusCode = 400;
+                    await Response.WriteAsync("Invalid ConversationId for this Knowledge Base.", cancellationToken);
                     return;
                 }
                 currentConversationId = conversation.Id;
@@ -337,6 +351,11 @@ namespace RagPipeline.API.Controllers
                 var newConv = await _conversationService.CreateAsync(request.KnowledgeBaseId, title, cancellationToken);
                 currentConversationId = newConv.Id;
             }
+
+            // 2. Setup SSE Headers
+            Response.Headers.Append("Content-Type", "text/event-stream");
+            Response.Headers.Append("Cache-Control", "no-cache");
+            Response.Headers.Append("Connection", "keep-alive");
 
             // 3. History, User Message Saving & Query Rewriting
             var history = await _conversationService.GetRecentMessagesAsync(currentConversationId, 6, cancellationToken);
@@ -365,6 +384,7 @@ namespace RagPipeline.API.Controllers
                 var payload = JsonSerializer.Serialize(new { type = "chunk", text = noContextAnswer });
                 await Response.WriteAsync($"data: {payload}\n\n", cancellationToken);
                 await Response.WriteAsync("data: [DONE]\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
                 return;
             }
 
@@ -372,16 +392,13 @@ namespace RagPipeline.API.Controllers
             var sources = relevantResults.Select((x, index) => new AskSource
             {
                 Citation = $"[{index + 1}]",
+                DocumentId = x.DocumentId,
                 FileName = x.FileName,
                 ChunkId = x.ChunkId,
                 ChunkIndex = x.ChunkIndex,
                 RerankScore = x.RerankScore,
                 Content = x.Content
             }).ToList();
-
-            var sourcesPayload = JsonSerializer.Serialize(new { type = "sources", sources = sources });
-            await Response.WriteAsync($"data: {sourcesPayload}\n\n", cancellationToken);
-            await Response.Body.FlushAsync(cancellationToken);
 
             var context = relevantResults.Select((x, index) => $"[{index + 1}] {x.Content}").ToList();
 
@@ -398,8 +415,20 @@ namespace RagPipeline.API.Controllers
                 await Response.Body.FlushAsync(cancellationToken);
             }
 
-            // 7. Save Assistant Message to DB
+            // 7. Mark Cited Sources, Emit Sources Event & Save Assistant Message to DB
             var finalAnswerString = fullAnswer.ToString();
+            var citationsValid = HasValidCitations(finalAnswerString, sources.Count);
+            MarkCitedSources(finalAnswerString, sources);
+
+            var sourcesPayload = JsonSerializer.Serialize(new
+            {
+                type = "sources",
+                citationsValid = citationsValid,
+                sources = sources
+            });
+            await Response.WriteAsync($"data: {sourcesPayload}\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+
             await _conversationService.AddMessageAsync(currentConversationId, "assistant", finalAnswerString, JsonSerializer.Serialize(sources), cancellationToken);
 
             // Signal stream completion
@@ -407,16 +436,28 @@ namespace RagPipeline.API.Controllers
             await Response.Body.FlushAsync(cancellationToken);
         }
 
-        private async Task SendSseErrorAsync(string errorMessage)
+
+        private static void MarkCitedSources(string answer, List<AskSource> sources)
         {
-            var payload = JsonSerializer.Serialize(new { type = "error", message = errorMessage });
-            await Response.WriteAsync($"data: {payload}\n\n");
-            await Response.Body.FlushAsync();
+            var citedIndices = Regex.Matches(answer, @"\[(\d+)\]")
+                .Select(m => int.TryParse(m.Groups[1].Value, out var n) ? n : -1)
+                .Where(n => n >= 1 && n <= sources.Count)
+                .ToHashSet();
+
+            for (var i = 0; i < sources.Count; i++)
+            {
+                sources[i].IsCited = citedIndices.Contains(i + 1);
+            }
         }
 
         private static bool HasValidCitations(string answer, int sourceCount)
         {
             if (sourceCount <= 0)
+            {
+                return true;
+            }
+
+            if (answer.Trim().Equals("The information is not available in the provided context.", StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
