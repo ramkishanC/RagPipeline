@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using RagPipeline.Application.Interfaces.Services;
+using RagPipeline.Domain.Entities;
 using RagPipeline.Infrastructure.Models.Ollama;
 using System;
 using System.Collections.Generic;
@@ -19,7 +20,7 @@ namespace RagPipeline.Infrastructure.Services
             _model = configuration["Ollama:ChatModel"] ?? throw new InvalidOperationException("Ollama chat model is not configured.");
         }
 
-        public async Task<string> GenerateAnswerAsync(string query, IReadOnlyList<string> context, CancellationToken cancellationToken = default)
+        public async Task<string> GenerateAnswerAsync(string query, IReadOnlyList<string> context, IReadOnlyList<ChatMessage> history, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrWhiteSpace(query))
             {
@@ -64,18 +65,33 @@ namespace RagPipeline.Infrastructure.Services
             Answer:
             """;
 
+            var messages = new List<OllamaChatMessage>();
+
+            // Inject prior conversation history
+            if (history != null && history.Count > 0)
+            {
+                foreach (var msg in history)
+                {
+                    messages.Add(new OllamaChatMessage
+                    {
+                        Role = msg.Role,
+                        Content = msg.Content
+                    });
+                }
+            }
+
+            // Add current RAG prompt
+            messages.Add(new OllamaChatMessage
+            {
+                Role = "user",
+                Content = prompt
+            });
+
             var request = new OllamaChatRequest
             {
                 Model = _model,
                 Stream = false,
-                Messages =
-                [
-                    new OllamaChatMessage
-                    {
-                        Role = "user",
-                        Content = prompt
-                    }
-                ]
+                Messages = messages
             };
 
             var response = await _httpClient.PostAsJsonAsync("api/chat", request, cancellationToken);

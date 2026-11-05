@@ -22,6 +22,10 @@ namespace RagPipeline.Infrastructure.Persistence
 
         public DbSet<KnowledgeBase> KnowledgeBases => Set<KnowledgeBase>();
 
+        public DbSet<Conversation> Conversations { get; set; }
+
+        public DbSet<ChatMessage> ChatMessages { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -95,6 +99,26 @@ namespace RagPipeline.Infrastructure.Persistence
                     .HasMethod("GIN");
 
                 entity.HasIndex(x => new { x.DocumentId, x.ChunkIndex });
+            });
+
+            modelBuilder.Entity<Conversation>(entity =>
+            {
+                entity.HasKey(c => c.Id);
+
+                entity.HasOne(c => c.KnowledgeBase)
+                    .WithMany(kb => kb.Conversations)
+                    .HasForeignKey(c => c.KnowledgeBaseId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<ChatMessage>(entity =>
+            {
+                entity.HasKey(m => m.Id);
+
+                entity.HasOne(m => m.Conversation)
+                    .WithMany(c => c.Messages)
+                    .HasForeignKey(m => m.ConversationId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

@@ -26,6 +26,59 @@ namespace RagPipeline.Infrastructure.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("RagPipeline.Domain.Entities.ChatMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CitationsJson")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ConversationId");
+
+                    b.ToTable("ChatMessages");
+                });
+
+            modelBuilder.Entity("RagPipeline.Domain.Entities.Conversation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("KnowledgeBaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KnowledgeBaseId");
+
+                    b.ToTable("Conversations");
+                });
+
             modelBuilder.Entity("RagPipeline.Domain.Entities.Document", b =>
                 {
                     b.Property<Guid>("Id")
@@ -163,6 +216,28 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.ToTable("RagUsers");
                 });
 
+            modelBuilder.Entity("RagPipeline.Domain.Entities.ChatMessage", b =>
+                {
+                    b.HasOne("RagPipeline.Domain.Entities.Conversation", "Conversation")
+                        .WithMany("Messages")
+                        .HasForeignKey("ConversationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Conversation");
+                });
+
+            modelBuilder.Entity("RagPipeline.Domain.Entities.Conversation", b =>
+                {
+                    b.HasOne("RagPipeline.Domain.Entities.KnowledgeBase", "KnowledgeBase")
+                        .WithMany("Conversations")
+                        .HasForeignKey("KnowledgeBaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("KnowledgeBase");
+                });
+
             modelBuilder.Entity("RagPipeline.Domain.Entities.Document", b =>
                 {
                     b.HasOne("RagPipeline.Domain.Entities.KnowledgeBase", "KnowledgeBase")
@@ -196,6 +271,11 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.Navigation("RagUser");
                 });
 
+            modelBuilder.Entity("RagPipeline.Domain.Entities.Conversation", b =>
+                {
+                    b.Navigation("Messages");
+                });
+
             modelBuilder.Entity("RagPipeline.Domain.Entities.Document", b =>
                 {
                     b.Navigation("Chunks");
@@ -203,6 +283,8 @@ namespace RagPipeline.Infrastructure.Migrations
 
             modelBuilder.Entity("RagPipeline.Domain.Entities.KnowledgeBase", b =>
                 {
+                    b.Navigation("Conversations");
+
                     b.Navigation("Documents");
                 });
 

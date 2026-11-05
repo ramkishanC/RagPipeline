@@ -68,6 +68,8 @@ namespace RagPipeline.API
             builder.Services.AddScoped<IVectorSearchRepository, VectorSearchRepository>();
             builder.Services.AddScoped<IKeywordSearchRepository, KeywordSearchRepository>();
             builder.Services.AddScoped<IKnowledgeBaseRepository, KnowledgeBaseRepository>();
+            builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
+
             builder.Services.AddScoped<IKnowledgeBaseService, KnowledgeBaseService>();
             builder.Services.AddScoped<ICurrentUserService, ClaimsCurrentUserService>();
             builder.Services.AddScoped<IDocumentService, DocumentService>();
