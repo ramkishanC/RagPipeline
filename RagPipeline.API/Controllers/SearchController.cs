@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using RagPipeline.Application.DTOs;
 using RagPipeline.Application.DTOs.Search;
 using RagPipeline.Application.Interfaces.Services;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -21,10 +22,11 @@ namespace RagPipeline.API.Controllers
         private readonly IKnowledgeBaseService _knowledgeBaseService;
         private readonly ICurrentUserService _currentUserService;
         private readonly IConversationService _conversationService;
+        private readonly IQueryRewritingService _queryRewritingService;
 
         private readonly double _minimumRerankScore;
 
-        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration, IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService, IConversationService conversationService)
+        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration, IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService, IConversationService conversationService, IQueryRewritingService queryRewritingService)
         {
             _vectorSearchService = vectorSearchService;
             _keywordSearchService = keywordSearchService;
@@ -35,6 +37,7 @@ namespace RagPipeline.API.Controllers
             _knowledgeBaseService = knowledgeBaseService;
             _currentUserService = currentUserService;
             _conversationService = conversationService;
+            _queryRewritingService = queryRewritingService;
         }
 
         /// <summary>Searches vectors within a knowledge base owned by the current user.</summary>
@@ -208,14 +211,17 @@ namespace RagPipeline.API.Controllers
             // 3. Save current user query to DB via Service Layer
             await _conversationService.AddMessageAsync(currentConversationId, "user", request.Query, null, cancellationToken);
 
-            // 4. Execute RAG Retrieval
-            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, request.Query, request.TopK, request.Category, request.Tags, cancellationToken);
+            // 4. Rewrite query into a standalone search query using conversation history
+            var standaloneQuery = await _queryRewritingService.RewriteQueryAsync(request.Query, history, cancellationToken);
+
+            // 5. Execute RAG Retrieval using the standalone rewritten query
+            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, standaloneQuery, request.TopK, request.Category, request.Tags, cancellationToken);
 
             var relevantResults = rerankedResult.Results
                 .Where(x => x.RerankScore >= _minimumRerankScore)
                 .ToList();
 
-            // 5. Handle "No Context Found" Gracefully
+            // 6. Handle "No Context Found" Gracefully
             if (relevantResults.Count == 0)
             {
                 var noContextAnswer = "I don't have enough information in the provided documents to answer this question.";
@@ -227,12 +233,13 @@ namespace RagPipeline.API.Controllers
                 {
                     ConversationId = currentConversationId,
                     Query = request.Query,
+                    RewrittenQuery = standaloneQuery,
                     Answer = noContextAnswer,
                     Sources = []
                 });
             }
 
-            // 6. Format Sources & Context
+            // 7. Format Sources & Context
             var sources = relevantResults
                 .Select((x, index) => new AskSource
                 {
@@ -249,19 +256,20 @@ namespace RagPipeline.API.Controllers
                 .Select((x, index) => $"[{index + 1}] {x.Content}")
                 .ToList();
 
-            // 7. Generate Answer via Ollama (passing history)
+            // 8. Generate Answer via Ollama (passing history)
             var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, history, cancellationToken);
 
-            // 8. Save AI Response to DB with serialized Citations via Service Layer
+            // 9. Save AI Response to DB with serialized Citations via Service Layer
             await _conversationService.AddMessageAsync(currentConversationId, "assistant", answer, JsonSerializer.Serialize(sources), cancellationToken);
 
-            // 9. Final Validation
+            // 10. Final Validation
             if (!HasValidCitations(answer, sources.Count))
             {
                 return Ok(new AskResponse
                 {
                     ConversationId = currentConversationId,
                     Query = request.Query,
+                    RewrittenQuery = standaloneQuery,
                     Answer = "I could not verify the generated answer against the retrieved sources.",
                     Sources = sources
                 });
@@ -271,9 +279,139 @@ namespace RagPipeline.API.Controllers
             {
                 ConversationId = currentConversationId,
                 Query = request.Query,
+                RewrittenQuery = standaloneQuery,
                 Answer = answer,
                 Sources = sources
             });
+        }
+
+        /// <summary>Streams a cited answer using Server-Sent Events (SSE).</summary>
+        [HttpPost("ask/stream")]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
+        public async Task AskStream(AskRequest request, CancellationToken cancellationToken)
+        {
+            var externalUserId = _currentUserService.GetUserId();
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                Response.StatusCode = 400;
+                await Response.WriteAsync("X-User-Id header is required.");
+                return;
+            }
+
+            if (request.KnowledgeBaseId == Guid.Empty)
+            {
+                Response.StatusCode = 400;
+                await Response.WriteAsync("KnowledgeBaseId is required.");
+                return;
+            }
+
+            if (!await HasKnowledgeBaseAccessAsync(request.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                Response.StatusCode = 403;
+                await Response.WriteAsJsonAsync(new ApiErrorResponse { Message = "You do not have access to this knowledge base." });
+                return;
+            }
+
+            // 1. Setup SSE Headers
+            Response.Headers.Append("Content-Type", "text/event-stream");
+            Response.Headers.Append("Cache-Control", "no-cache");
+            Response.Headers.Append("Connection", "keep-alive");
+
+            // 2. Resolve/Create Conversation
+            Guid currentConversationId;
+            if (request.ConversationId.HasValue && request.ConversationId.Value != Guid.Empty)
+            {
+                var conversation = await _conversationService.GetByIdAsync(request.ConversationId.Value, cancellationToken);
+                if (conversation == null || conversation.KnowledgeBaseId != request.KnowledgeBaseId)
+                {
+                    await SendSseErrorAsync("Invalid ConversationId.");
+                    return;
+                }
+                currentConversationId = conversation.Id;
+            }
+            else
+            {
+                var title = request.Query.Length > 50 ? request.Query[..50] + "..." : request.Query;
+                var newConv = await _conversationService.CreateAsync(request.KnowledgeBaseId, title, cancellationToken);
+                currentConversationId = newConv.Id;
+            }
+
+            // 3. History, User Message Saving & Query Rewriting
+            var history = await _conversationService.GetRecentMessagesAsync(currentConversationId, 6, cancellationToken);
+            await _conversationService.AddMessageAsync(currentConversationId, "user", request.Query, null, cancellationToken);
+            var standaloneQuery = await _queryRewritingService.RewriteQueryAsync(request.Query, history, cancellationToken);
+
+            // Send initial metadata payload (including the rewritten query)
+            var metaPayload = JsonSerializer.Serialize(new
+            {
+                type = "meta",
+                conversationId = currentConversationId,
+                rewrittenQuery = standaloneQuery
+            });
+            await Response.WriteAsync($"data: {metaPayload}\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+
+            // 4. RAG Retrieval using the standalone rewritten query
+            var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, standaloneQuery, request.TopK, request.Category, request.Tags, cancellationToken);
+            var relevantResults = rerankedResult.Results.Where(x => x.RerankScore >= _minimumRerankScore).ToList();
+
+            if (relevantResults.Count == 0)
+            {
+                var noContextAnswer = "I don't have enough information in the provided documents to answer this question.";
+                await _conversationService.AddMessageAsync(currentConversationId, "assistant", noContextAnswer, null, cancellationToken);
+
+                var payload = JsonSerializer.Serialize(new { type = "chunk", text = noContextAnswer });
+                await Response.WriteAsync($"data: {payload}\n\n", cancellationToken);
+                await Response.WriteAsync("data: [DONE]\n\n", cancellationToken);
+                return;
+            }
+
+            // 5. Context Prep
+            var sources = relevantResults.Select((x, index) => new AskSource
+            {
+                Citation = $"[{index + 1}]",
+                FileName = x.FileName,
+                ChunkId = x.ChunkId,
+                ChunkIndex = x.ChunkIndex,
+                RerankScore = x.RerankScore,
+                Content = x.Content
+            }).ToList();
+
+            var sourcesPayload = JsonSerializer.Serialize(new { type = "sources", sources = sources });
+            await Response.WriteAsync($"data: {sourcesPayload}\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+
+            var context = relevantResults.Select((x, index) => $"[{index + 1}] {x.Content}").ToList();
+
+            // 6. Execute Streaming
+            var stream = _answerGenerationService.GenerateStreamedAnswerAsync(request.Query, context, history, cancellationToken);
+            var fullAnswer = new StringBuilder();
+
+            await foreach (var chunk in stream)
+            {
+                fullAnswer.Append(chunk);
+
+                var chunkPayload = JsonSerializer.Serialize(new { type = "chunk", text = chunk });
+                await Response.WriteAsync($"data: {chunkPayload}\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+            }
+
+            // 7. Save Assistant Message to DB
+            var finalAnswerString = fullAnswer.ToString();
+            await _conversationService.AddMessageAsync(currentConversationId, "assistant", finalAnswerString, JsonSerializer.Serialize(sources), cancellationToken);
+
+            // Signal stream completion
+            await Response.WriteAsync("data: [DONE]\n\n", cancellationToken);
+            await Response.Body.FlushAsync(cancellationToken);
+        }
+
+        private async Task SendSseErrorAsync(string errorMessage)
+        {
+            var payload = JsonSerializer.Serialize(new { type = "error", message = errorMessage });
+            await Response.WriteAsync($"data: {payload}\n\n");
+            await Response.Body.FlushAsync();
         }
 
         private static bool HasValidCitations(string answer, int sourceCount)

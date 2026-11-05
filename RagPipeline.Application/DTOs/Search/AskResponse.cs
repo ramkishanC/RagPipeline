@@ -10,6 +10,8 @@ namespace RagPipeline.Application.DTOs.Search
 
         public string Query { get; set; } = string.Empty;
 
+        public string RewrittenQuery { get; set; } = string.Empty;
+
         public string Answer { get; set; } = string.Empty;
 
         public IReadOnlyList<AskSource> Sources { get; set; } = [];
