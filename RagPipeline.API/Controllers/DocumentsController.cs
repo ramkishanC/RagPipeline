@@ -1,10 +1,14 @@
+using MassTransit;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RagPipeline.Application.DTOs;
 using RagPipeline.Application.DTOs.Documents;
+using RagPipeline.Application.DTOs.Events;
 using RagPipeline.Application.Interfaces.Services;
 
 namespace RagPipeline.API.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class DocumentsController : ControllerBase
@@ -12,24 +16,33 @@ namespace RagPipeline.API.Controllers
         private readonly IDocumentService _documentService;
         private readonly IKnowledgeBaseService _knowledgeBaseService;
         private readonly ICurrentUserService _currentUserService;
+        private readonly IPublishEndpoint _publishEndpoint;
 
-        public DocumentsController(IDocumentService documentService, IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService)
+        public DocumentsController(IDocumentService documentService, IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService, IPublishEndpoint publishEndpoint)
         {
             _documentService = documentService;
             _knowledgeBaseService = knowledgeBaseService;
             _currentUserService = currentUserService;
+            _publishEndpoint = publishEndpoint;
         }
 
-        /// <summary>Uploads and indexes a document in a knowledge base owned by the current user.</summary>
+        /// <summary>Uploads and queues a document for indexing in a knowledge base owned by the current user.</summary>
         /// <param name="knowledgeBaseId">The destination knowledge base identifier.</param>
         /// <param name="file">The PDF, text, or Markdown file to upload.</param>
+        /// <param name="category">Optional category to tag the document with.</param>
+        /// <param name="tags">Optional list of tags.</param>
         /// <param name="cancellationToken">The request cancellation token.</param>
         [HttpPost]
         [Consumes("multipart/form-data")]
-        [ProducesResponseType(typeof(DocumentResponse), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(DocumentResponse), StatusCodes.Status202Accepted)]
         [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(typeof(ApiErrorResponse), StatusCodes.Status403Forbidden)]
-        public async Task<ActionResult<DocumentResponse>> Upload([FromQuery] Guid knowledgeBaseId, IFormFile file, CancellationToken cancellationToken)
+        public async Task<ActionResult<DocumentResponse>> Upload(
+            [FromQuery] Guid knowledgeBaseId,
+            IFormFile file,
+            [FromForm] string? category,
+            [FromForm] List<string>? tags,
+            CancellationToken cancellationToken)
         {
             var externalUserId = _currentUserService.GetUserId();
 
@@ -69,8 +82,24 @@ namespace RagPipeline.API.Controllers
 
             await using var stream = file.OpenReadStream();
 
-            var document = await _documentService.UploadAsync(knowledgeBaseId,stream,file.FileName,file.ContentType,file.Length,cancellationToken);
-            return CreatedAtAction(nameof(GetById), new { id = document.Id }, document);
+            // Saves to database as 'Pending' and writes file to local disk (now passing category and tags)
+            var document = await _documentService.UploadAsync(
+                knowledgeBaseId,
+                stream,
+                file.FileName,
+                file.ContentType,
+                file.Length,
+                category,
+                tags,
+                cancellationToken);
+
+            // Publish event to RabbitMQ for background worker processing
+            await _publishEndpoint.Publish(new DocumentUploadedEvent
+            {
+                DocumentId = document.Id
+            }, cancellationToken);
+
+            return AcceptedAtAction(nameof(GetById), new { id = document.Id }, document);
         }
 
         /// <summary>Lists documents in a knowledge base owned by the current user.</summary>
@@ -133,6 +162,37 @@ namespace RagPipeline.API.Controllers
             }
 
             return Ok(document);
+        }
+
+        [HttpDelete("{id:guid}")]
+        public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)
+        {
+            var externalUserId = _currentUserService.GetUserId();
+            if (string.IsNullOrWhiteSpace(externalUserId))
+            {
+                return Unauthorized("A valid user token is required.");
+            }
+
+            var document = await _documentService.GetByIdAsync(id, cancellationToken);
+            if (document is null)
+            {
+                return NotFound();
+            }
+
+            // Enforce ownership: You cannot delete a document if you don't own the KB it belongs to
+            if (!await HasKnowledgeBaseAccessAsync(document.KnowledgeBaseId, externalUserId, cancellationToken))
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "You do not have access to this document." });
+            }
+
+            var deleted = await _documentService.DeleteAsync(id, cancellationToken);
+
+            if (!deleted)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
         }
 
         private async Task<bool> HasKnowledgeBaseAccessAsync(Guid knowledgeBaseId, string externalUserId, CancellationToken cancellationToken)

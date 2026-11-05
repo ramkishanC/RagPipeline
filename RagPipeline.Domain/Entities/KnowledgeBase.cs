@@ -16,5 +16,7 @@ namespace RagPipeline.Domain.Entities
         public RagUser RagUser { get; set; } = null!;
 
         public ICollection<Document> Documents { get; set; } = new List<Document>();
+
+        public ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
     }
 }

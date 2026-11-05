@@ -13,7 +13,7 @@ public class KeywordSearchService : IKeywordSearchService
         _keywordSearchRepository = keywordSearchRepository;
     }
 
-    public async Task<KeywordSearchResponse> SearchAsync(Guid knowledgeBaseId, string query, int topK = 5, CancellationToken cancellationToken = default)
+    public async Task<KeywordSearchResponse> SearchAsync(Guid knowledgeBaseId, string query, int topK = 5, string? category = null, List<string>? tags = null, CancellationToken cancellationToken = default)
     {
         if (knowledgeBaseId == Guid.Empty)
         {
@@ -32,7 +32,7 @@ public class KeywordSearchService : IKeywordSearchService
 
         topK = Math.Min(topK, 20);
 
-        var results = await _keywordSearchRepository.SearchAsync(knowledgeBaseId, query, topK, cancellationToken);
+        var results = await _keywordSearchRepository.SearchAsync(knowledgeBaseId, query, topK, category, tags, cancellationToken);
 
         return new KeywordSearchResponse
         {

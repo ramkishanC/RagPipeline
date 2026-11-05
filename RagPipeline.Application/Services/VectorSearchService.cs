@@ -17,7 +17,7 @@ namespace RagPipeline.Application.Services
             _vectorSearchRepository = vectorSearchRepository;
         }
 
-        public async Task<VectorSearchResponse> SearchAsync(Guid knowledgeBaseId, string query, int topK = 5, CancellationToken cancellationToken = default)
+        public async Task<VectorSearchResponse> SearchAsync(Guid knowledgeBaseId, string query, int topK = 5, string? category = null, List<string>? tags = null, CancellationToken cancellationToken = default)
         {
             if (knowledgeBaseId == Guid.Empty)
             {
@@ -46,8 +46,7 @@ namespace RagPipeline.Application.Services
                 throw new InvalidOperationException($"Expected 768-dimensional embedding, but received {queryEmbedding.Length}.");
             }
 
-            var results = await _vectorSearchRepository.SearchAsync(knowledgeBaseId, queryEmbedding, topK, cancellationToken);
-
+            var results = await _vectorSearchRepository.SearchAsync(knowledgeBaseId, queryEmbedding, topK, category, tags, cancellationToken);
             return new VectorSearchResponse
             {
                 Query = query,

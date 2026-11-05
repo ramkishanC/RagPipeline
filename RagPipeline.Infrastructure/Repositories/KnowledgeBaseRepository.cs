@@ -40,5 +40,27 @@ namespace RagPipeline.Infrastructure.Repositories
             await _dbContext.KnowledgeBases.AddAsync(knowledgeBase, cancellationToken);
             await _dbContext.SaveChangesAsync(cancellationToken);
         }
+
+        public async Task<List<KnowledgeBase>> GetAllForUserAsync(string externalUserId, CancellationToken cancellationToken = default)
+        {
+            return await _dbContext.KnowledgeBases
+                .AsNoTracking()
+                .Include(x => x.RagUser)
+                .Where(x => x.RagUser.ExternalUserId == externalUserId)
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync(cancellationToken);
+        }
+
+        public async Task UpdateAsync(KnowledgeBase knowledgeBase, CancellationToken cancellationToken = default)
+        {
+            _dbContext.KnowledgeBases.Update(knowledgeBase);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        public async Task DeleteAsync(KnowledgeBase knowledgeBase, CancellationToken cancellationToken = default)
+        {
+            _dbContext.KnowledgeBases.Remove(knowledgeBase);
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
     }
 }

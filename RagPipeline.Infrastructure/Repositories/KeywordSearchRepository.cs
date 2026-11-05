@@ -15,11 +15,26 @@ public class KeywordSearchRepository : IKeywordSearchRepository
         _dbContext = dbContext;
     }
 
-    public async Task<List<KeywordSearchResult>> SearchAsync(Guid knowledgeBaseId, string query, int topK, CancellationToken cancellationToken = default)
+    public async Task<List<KeywordSearchResult>> SearchAsync(Guid knowledgeBaseId, string query, int topK, string? category = null, List<string>? tags = null, CancellationToken cancellationToken = default)
     {
-        return await _dbContext.DocumentChunks
+        var queryable = _dbContext.DocumentChunks
             .AsNoTracking()
-            .Where(x => x.Document.KnowledgeBaseId == knowledgeBaseId && EF.Property<NpgsqlTsVector>(x, "SearchVector").Matches(EF.Functions.WebSearchToTsQuery("english", query)))
+            .Where(x => x.Document.KnowledgeBaseId == knowledgeBaseId && EF.Property<NpgsqlTsVector>(x, "SearchVector").Matches(EF.Functions.WebSearchToTsQuery("english", query)));
+
+        if (!string.IsNullOrWhiteSpace(category))
+        {
+            queryable = queryable.Where(x => x.Document.Category == category);
+        }
+
+        if (tags != null && tags.Count > 0)
+        {
+            foreach (var tag in tags)
+            {
+                queryable = queryable.Where(x => x.Document.Tags.Contains(tag));
+            }
+        }
+
+        return await queryable
             .OrderByDescending(x => EF.Property<NpgsqlTsVector>(x, "SearchVector").Rank(EF.Functions.WebSearchToTsQuery("english", query)))
             .Take(topK)
             .Select(x => new KeywordSearchResult

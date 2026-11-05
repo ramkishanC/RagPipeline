@@ -10,8 +10,14 @@ namespace RagPipeline.Application.Interfaces.Repositories
 
         Task<KnowledgeBase?> GetByIdForUserAsync(Guid id, string externalUserId, CancellationToken cancellationToken = default);
 
+        Task<List<KnowledgeBase>> GetAllForUserAsync(string externalUserId, CancellationToken cancellationToken = default);
+
         Task AddRagUserAsync(RagUser ragUser, CancellationToken cancellationToken = default);
 
         Task AddAsync(KnowledgeBase knowledgeBase, CancellationToken cancellationToken = default);
+
+        Task UpdateAsync(KnowledgeBase knowledgeBase, CancellationToken cancellationToken = default);
+
+        Task DeleteAsync(KnowledgeBase knowledgeBase, CancellationToken cancellationToken = default);
     }
 }
