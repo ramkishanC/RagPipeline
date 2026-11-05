@@ -80,6 +80,8 @@ namespace RagPipeline.API
             builder.Services.AddScoped<IHybridSearchService, HybridSearchService>();
             builder.Services.AddScoped<IRerankedSearchService, RerankedSearchService>();
             builder.Services.AddScoped<IConversationService, ConversationService>();
+            builder.Services.AddScoped<IRagEvaluationService, RagEvaluationService>();
+
             builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>(client =>
             {
                 var baseUrl = builder.Configuration["Ollama:BaseUrl"] ?? throw new InvalidOperationException("Ollama BaseUrl is missing.");
