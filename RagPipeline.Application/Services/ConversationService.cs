@@ -31,7 +31,7 @@ namespace RagPipeline.Application.Services
             return await _conversationRepository.GetByKnowledgeBaseIdAsync(knowledgeBaseId, cancellationToken);
         }
 
-        public async Task AddMessageAsync(Guid conversationId, string role, string content, string? citationsJson = null, CancellationToken cancellationToken = default)
+        public async Task<Guid> AddMessageAsync(Guid conversationId, string role, string content, string? citationsJson = null, CancellationToken cancellationToken = default)
         {
             var message = new ChatMessage
             {
@@ -44,6 +44,7 @@ namespace RagPipeline.Application.Services
             };
 
             await _conversationRepository.AddMessageAsync(message, cancellationToken);
+            return message.Id;
         }
 
         public async Task<List<ChatMessage>> GetRecentMessagesAsync(Guid conversationId, int limit = 10, CancellationToken cancellationToken = default)

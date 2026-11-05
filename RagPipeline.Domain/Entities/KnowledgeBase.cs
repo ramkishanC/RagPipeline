@@ -18,5 +18,7 @@ namespace RagPipeline.Domain.Entities
         public ICollection<Document> Documents { get; set; } = new List<Document>();
 
         public ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
+
+        public ICollection<AnswerFeedback> Feedbacks { get; set; } = new List<AnswerFeedback>();
     }
 }

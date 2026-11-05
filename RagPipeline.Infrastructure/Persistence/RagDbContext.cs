@@ -26,6 +26,8 @@ namespace RagPipeline.Infrastructure.Persistence
 
         public DbSet<ChatMessage> ChatMessages { get; set; }
 
+        public DbSet<AnswerFeedback> AnswerFeedbacks { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -119,6 +121,24 @@ namespace RagPipeline.Infrastructure.Persistence
                     .WithMany(c => c.Messages)
                     .HasForeignKey(m => m.ConversationId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<AnswerFeedback>(entity =>
+            {
+                entity.HasKey(f => f.Id);
+
+                entity.Property(f => f.Question)
+                    .IsRequired();
+
+                entity.Property(f => f.Answer)
+                    .IsRequired();
+
+                entity.HasOne(f => f.KnowledgeBase)
+                    .WithMany(kb => kb.Feedbacks)
+                    .HasForeignKey(f => f.KnowledgeBaseId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(f => new { f.KnowledgeBaseId, f.IsHelpful });
             });
         }
     }

@@ -232,11 +232,12 @@ namespace RagPipeline.API.Controllers
                 var noContextAnswer = "I don't have enough information in the provided documents to answer this question.";
 
                 // Save AI fallback response via Service Layer
-                await _conversationService.AddMessageAsync(currentConversationId, "assistant", noContextAnswer, null, cancellationToken);
+                var noContextMsgId = await _conversationService.AddMessageAsync(currentConversationId, "assistant", noContextAnswer, null, cancellationToken);
 
                 return Ok(new AskResponse
                 {
                     ConversationId = currentConversationId,
+                    MessageId = noContextMsgId,
                     Query = request.Query,
                     RewrittenQuery = standaloneQuery,
                     Answer = noContextAnswer,
@@ -269,11 +270,12 @@ namespace RagPipeline.API.Controllers
             if (!HasValidCitations(answer, sources.Count))
             {
                 var fallbackAnswer = "I could not verify the generated answer against the retrieved sources.";
-                await _conversationService.AddMessageAsync(currentConversationId, "assistant", fallbackAnswer, JsonSerializer.Serialize(sources), cancellationToken);
+                var fallbackMsgId = await _conversationService.AddMessageAsync(currentConversationId, "assistant", fallbackAnswer, JsonSerializer.Serialize(sources), cancellationToken);
 
                 return Ok(new AskResponse
                 {
                     ConversationId = currentConversationId,
+                    MessageId = fallbackMsgId,
                     Query = request.Query,
                     RewrittenQuery = standaloneQuery,
                     Answer = fallbackAnswer,
@@ -284,11 +286,12 @@ namespace RagPipeline.API.Controllers
             MarkCitedSources(answer, sources);
 
             // 10. Save AI Response to DB with serialized Citations via Service Layer
-            await _conversationService.AddMessageAsync(currentConversationId, "assistant", answer, JsonSerializer.Serialize(sources), cancellationToken);
+            var assistantMessageId = await _conversationService.AddMessageAsync(currentConversationId, "assistant", answer, JsonSerializer.Serialize(sources), cancellationToken);
 
             return Ok(new AskResponse
             {
                 ConversationId = currentConversationId,
+                MessageId = assistantMessageId,
                 Query = request.Query,
                 RewrittenQuery = standaloneQuery,
                 Answer = answer,
@@ -379,9 +382,9 @@ namespace RagPipeline.API.Controllers
             if (relevantResults.Count == 0)
             {
                 var noContextAnswer = "I don't have enough information in the provided documents to answer this question.";
-                await _conversationService.AddMessageAsync(currentConversationId, "assistant", noContextAnswer, null, cancellationToken);
+                var noContextMessageId = await _conversationService.AddMessageAsync(currentConversationId, "assistant", noContextAnswer, null, cancellationToken);
 
-                var payload = JsonSerializer.Serialize(new { type = "chunk", text = noContextAnswer });
+                var payload = JsonSerializer.Serialize(new { type = "chunk", messageId = noContextMessageId, text = noContextAnswer });
                 await Response.WriteAsync($"data: {payload}\n\n", cancellationToken);
                 await Response.WriteAsync("data: [DONE]\n\n", cancellationToken);
                 await Response.Body.FlushAsync(cancellationToken);
@@ -420,16 +423,17 @@ namespace RagPipeline.API.Controllers
             var citationsValid = HasValidCitations(finalAnswerString, sources.Count);
             MarkCitedSources(finalAnswerString, sources);
 
+            var assistantMessageId = await _conversationService.AddMessageAsync(currentConversationId, "assistant", finalAnswerString, JsonSerializer.Serialize(sources), cancellationToken);
+
             var sourcesPayload = JsonSerializer.Serialize(new
             {
                 type = "sources",
+                messageId = assistantMessageId,
                 citationsValid = citationsValid,
                 sources = sources
             });
             await Response.WriteAsync($"data: {sourcesPayload}\n\n", cancellationToken);
             await Response.Body.FlushAsync(cancellationToken);
-
-            await _conversationService.AddMessageAsync(currentConversationId, "assistant", finalAnswerString, JsonSerializer.Serialize(sources), cancellationToken);
 
             // Signal stream completion
             await Response.WriteAsync("data: [DONE]\n\n", cancellationToken);

@@ -26,6 +26,48 @@ namespace RagPipeline.Infrastructure.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("RagPipeline.Domain.Entities.AnswerFeedback", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Answer")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ChatMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsHelpful")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("KnowledgeBaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SourcesJson")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KnowledgeBaseId", "IsHelpful");
+
+                    b.ToTable("AnswerFeedbacks");
+                });
+
             modelBuilder.Entity("RagPipeline.Domain.Entities.ChatMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -216,6 +258,17 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.ToTable("RagUsers");
                 });
 
+            modelBuilder.Entity("RagPipeline.Domain.Entities.AnswerFeedback", b =>
+                {
+                    b.HasOne("RagPipeline.Domain.Entities.KnowledgeBase", "KnowledgeBase")
+                        .WithMany("Feedbacks")
+                        .HasForeignKey("KnowledgeBaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("KnowledgeBase");
+                });
+
             modelBuilder.Entity("RagPipeline.Domain.Entities.ChatMessage", b =>
                 {
                     b.HasOne("RagPipeline.Domain.Entities.Conversation", "Conversation")
@@ -286,6 +339,8 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.Navigation("Conversations");
 
                     b.Navigation("Documents");
+
+                    b.Navigation("Feedbacks");
                 });
 
             modelBuilder.Entity("RagPipeline.Domain.Entities.RagUser", b =>
