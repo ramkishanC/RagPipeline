@@ -26,6 +26,10 @@ namespace RagPipeline.Infrastructure.Persistence
 
         public DbSet<ChatMessage> ChatMessages { get; set; }
 
+        public DbSet<AnswerFeedback> AnswerFeedbacks { get; set; }
+
+        public DbSet<RagQueryTelemetry> RagQueryTelemetries { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -80,6 +84,9 @@ namespace RagPipeline.Infrastructure.Persistence
                     .WithOne(x => x.Document)
                     .HasForeignKey(x => x.DocumentId)
                     .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(x => new { x.KnowledgeBaseId, x.Status });
+                entity.HasIndex(x => new { x.KnowledgeBaseId, x.Category });
             });
 
             modelBuilder.Entity<DocumentChunk>(entity =>
@@ -99,6 +106,10 @@ namespace RagPipeline.Infrastructure.Persistence
                     .HasMethod("GIN");
 
                 entity.HasIndex(x => new { x.DocumentId, x.ChunkIndex });
+
+                entity.HasIndex(x => x.Embedding)
+                    .HasMethod("hnsw")
+                    .HasOperators("vector_cosine_ops");
             });
 
             modelBuilder.Entity<Conversation>(entity =>
@@ -119,6 +130,40 @@ namespace RagPipeline.Infrastructure.Persistence
                     .WithMany(c => c.Messages)
                     .HasForeignKey(m => m.ConversationId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<AnswerFeedback>(entity =>
+            {
+                entity.HasKey(f => f.Id);
+
+                entity.Property(f => f.Question)
+                    .IsRequired();
+
+                entity.Property(f => f.Answer)
+                    .IsRequired();
+
+                entity.HasOne(f => f.KnowledgeBase)
+                    .WithMany(kb => kb.Feedbacks)
+                    .HasForeignKey(f => f.KnowledgeBaseId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(f => new { f.KnowledgeBaseId, f.IsHelpful });
+            });
+
+            modelBuilder.Entity<RagQueryTelemetry>(entity =>
+            {
+                entity.HasKey(t => t.Id);
+
+                entity.Property(t => t.Query)
+                    .IsRequired();
+
+                entity.HasOne(t => t.KnowledgeBase)
+                    .WithMany(kb => kb.QueryTelemetries)
+                    .HasForeignKey(t => t.KnowledgeBaseId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(t => new { t.KnowledgeBaseId, t.CreatedAt });
+                entity.HasIndex(t => new { t.KnowledgeBaseId, t.IsNoAnswer });
             });
         }
     }

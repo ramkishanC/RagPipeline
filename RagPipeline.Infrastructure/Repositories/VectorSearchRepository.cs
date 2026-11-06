@@ -53,5 +53,29 @@ namespace RagPipeline.Infrastructure.Repositories
 
             return results;
         }
+
+        public async Task<List<VectorSearchResult>> GetChunksByDocumentAndIndicesAsync( Guid documentId, IEnumerable<int> chunkIndices, CancellationToken cancellationToken = default)
+        {
+            var indices = chunkIndices.Distinct().ToList();
+            if (indices.Count == 0)
+            {
+                return [];
+            }
+
+            return await _dbContext.DocumentChunks
+                .AsNoTracking()
+                .Where(x => x.DocumentId == documentId && indices.Contains(x.ChunkIndex))
+                .OrderBy(x => x.ChunkIndex)
+                .Select(x => new VectorSearchResult
+                {
+                    DocumentId = x.DocumentId,
+                    FileName = x.Document.FileName,
+                    ChunkId = x.Id,
+                    ChunkIndex = x.ChunkIndex,
+                    Content = x.Content,
+                    Distance = 0
+                })
+                .ToListAsync(cancellationToken);
+        }
     }
 }

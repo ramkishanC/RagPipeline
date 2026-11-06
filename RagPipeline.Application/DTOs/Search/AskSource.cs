@@ -8,6 +8,8 @@ namespace RagPipeline.Application.DTOs.Search
     {
         public string Citation { get; set; } = string.Empty;
 
+        public Guid DocumentId { get; set; }
+
         public string FileName { get; set; } = string.Empty;
 
         public Guid ChunkId { get; set; }
@@ -15,6 +17,8 @@ namespace RagPipeline.Application.DTOs.Search
         public int ChunkIndex { get; set; }
 
         public double RerankScore { get; set; }
+
+        public bool IsCited { get; set; }
 
         public string Content { get; set; } = string.Empty;
     }

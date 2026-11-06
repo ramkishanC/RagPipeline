@@ -12,4 +12,8 @@ public class HybridSearchRequest
 
     public List<string>? Tags { get; set; }
 
+    public double VectorWeight { get; set; } = 1.0;
+
+    public double KeywordWeight { get; set; } = 1.0;
+
 }

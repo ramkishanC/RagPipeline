@@ -26,6 +26,48 @@ namespace RagPipeline.Infrastructure.Migrations
             NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "vector");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("RagPipeline.Domain.Entities.AnswerFeedback", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Answer")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ChatMessageId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsHelpful")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("KnowledgeBaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Question")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SourcesJson")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KnowledgeBaseId", "IsHelpful");
+
+                    b.ToTable("AnswerFeedbacks");
+                });
+
             modelBuilder.Entity("RagPipeline.Domain.Entities.ChatMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -123,7 +165,9 @@ namespace RagPipeline.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("KnowledgeBaseId");
+                    b.HasIndex("KnowledgeBaseId", "Category");
+
+                    b.HasIndex("KnowledgeBaseId", "Status");
 
                     b.ToTable("Documents");
                 });
@@ -161,6 +205,11 @@ namespace RagPipeline.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("Embedding");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
+
                     b.HasIndex("SearchVector");
 
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
@@ -194,6 +243,71 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.ToTable("KnowledgeBases");
                 });
 
+            modelBuilder.Entity("RagPipeline.Domain.Entities.RagQueryTelemetry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("CitationsValid")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("ConversationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasColumnType("text");
+
+                    b.Property<int>("EstimatedCompletionTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("EstimatedPromptTokens")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsNoAnswer")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSuccess")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("KnowledgeBaseId")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("LlmLatencyMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Query")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("RetrievalLatencyMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("RetrievedChunkCount")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("RewriteLatencyMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RewrittenQuery")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("TotalLatencyMs")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("KnowledgeBaseId", "CreatedAt");
+
+                    b.HasIndex("KnowledgeBaseId", "IsNoAnswer");
+
+                    b.ToTable("RagQueryTelemetries");
+                });
+
             modelBuilder.Entity("RagPipeline.Domain.Entities.RagUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -214,6 +328,17 @@ namespace RagPipeline.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("RagUsers");
+                });
+
+            modelBuilder.Entity("RagPipeline.Domain.Entities.AnswerFeedback", b =>
+                {
+                    b.HasOne("RagPipeline.Domain.Entities.KnowledgeBase", "KnowledgeBase")
+                        .WithMany("Feedbacks")
+                        .HasForeignKey("KnowledgeBaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("KnowledgeBase");
                 });
 
             modelBuilder.Entity("RagPipeline.Domain.Entities.ChatMessage", b =>
@@ -271,6 +396,17 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.Navigation("RagUser");
                 });
 
+            modelBuilder.Entity("RagPipeline.Domain.Entities.RagQueryTelemetry", b =>
+                {
+                    b.HasOne("RagPipeline.Domain.Entities.KnowledgeBase", "KnowledgeBase")
+                        .WithMany("QueryTelemetries")
+                        .HasForeignKey("KnowledgeBaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("KnowledgeBase");
+                });
+
             modelBuilder.Entity("RagPipeline.Domain.Entities.Conversation", b =>
                 {
                     b.Navigation("Messages");
@@ -286,6 +422,10 @@ namespace RagPipeline.Infrastructure.Migrations
                     b.Navigation("Conversations");
 
                     b.Navigation("Documents");
+
+                    b.Navigation("Feedbacks");
+
+                    b.Navigation("QueryTelemetries");
                 });
 
             modelBuilder.Entity("RagPipeline.Domain.Entities.RagUser", b =>

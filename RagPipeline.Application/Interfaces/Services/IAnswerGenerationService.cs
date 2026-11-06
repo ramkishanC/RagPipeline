@@ -8,5 +8,7 @@ namespace RagPipeline.Application.Interfaces.Services
     public interface IAnswerGenerationService
     {
         Task<string> GenerateAnswerAsync(string query, IReadOnlyList<string> context, IReadOnlyList<ChatMessage> history, CancellationToken cancellationToken = default);
+
+        IAsyncEnumerable<string> GenerateStreamedAnswerAsync(string query, IReadOnlyList<string> context, IReadOnlyList<ChatMessage> history, CancellationToken cancellationToken = default);
     }
 }

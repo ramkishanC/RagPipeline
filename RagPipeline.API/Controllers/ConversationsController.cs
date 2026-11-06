@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RagPipeline.Application.DTOs;
 using RagPipeline.Application.DTOs.Conversations;
+using RagPipeline.Application.DTOs.Search;
 using RagPipeline.Application.Interfaces.Repositories;
 using RagPipeline.Application.Interfaces.Services;
 using RagPipeline.Application.Services;
+using System.Text.Json;
 
 namespace RagPipeline.API.Controllers
 {
@@ -65,7 +67,9 @@ namespace RagPipeline.API.Controllers
                 Id = m.Id,
                 Role = m.Role,
                 Content = m.Content,
-                CitationsJson = m.CitationsJson,
+                Sources = string.IsNullOrWhiteSpace(m.CitationsJson)
+                    ? new List<AskSource>()
+                    : JsonSerializer.Deserialize<List<AskSource>>(m.CitationsJson) ?? new List<AskSource>(),
                 CreatedAt = m.CreatedAt
             }).ToList());
         }
