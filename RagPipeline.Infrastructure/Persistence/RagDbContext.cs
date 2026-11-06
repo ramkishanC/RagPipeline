@@ -84,6 +84,9 @@ namespace RagPipeline.Infrastructure.Persistence
                     .WithOne(x => x.Document)
                     .HasForeignKey(x => x.DocumentId)
                     .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(x => new { x.KnowledgeBaseId, x.Status });
+                entity.HasIndex(x => new { x.KnowledgeBaseId, x.Category });
             });
 
             modelBuilder.Entity<DocumentChunk>(entity =>
@@ -103,6 +106,10 @@ namespace RagPipeline.Infrastructure.Persistence
                     .HasMethod("GIN");
 
                 entity.HasIndex(x => new { x.DocumentId, x.ChunkIndex });
+
+                entity.HasIndex(x => x.Embedding)
+                    .HasMethod("hnsw")
+                    .HasOperators("vector_cosine_ops");
             });
 
             modelBuilder.Entity<Conversation>(entity =>

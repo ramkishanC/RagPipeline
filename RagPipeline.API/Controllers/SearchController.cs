@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using RagPipeline.Application.DTOs;
 using RagPipeline.Application.DTOs.Admin;
 using RagPipeline.Application.DTOs.Search;
@@ -12,6 +13,7 @@ using System.Text.RegularExpressions;
 namespace RagPipeline.API.Controllers
 {
     [Authorize]
+    [EnableRateLimiting("rag-standard")]
     [ApiController]
     [Route("api/[controller]")]
     public class SearchController : ControllerBase
@@ -170,6 +172,7 @@ namespace RagPipeline.API.Controllers
         /// <summary>Generates a cited answer using documents from a knowledge base owned by the current user.</summary>
         /// <param name="request">The knowledge base, question, and retrieval limit.</param>
         /// <param name="cancellationToken">The request cancellation token.</param>
+        [EnableRateLimiting("rag-llm")]
         [HttpPost("ask")]
         [ProducesResponseType(typeof(AskResponse), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]
@@ -319,6 +322,7 @@ namespace RagPipeline.API.Controllers
         }
 
         /// <summary>Streams a cited answer using Server-Sent Events (SSE).</summary>
+        [EnableRateLimiting("rag-llm")]
         [HttpPost("ask/stream")]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(string), StatusCodes.Status400BadRequest)]

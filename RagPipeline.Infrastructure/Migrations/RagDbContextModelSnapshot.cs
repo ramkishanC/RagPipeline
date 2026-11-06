@@ -165,7 +165,9 @@ namespace RagPipeline.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("KnowledgeBaseId");
+                    b.HasIndex("KnowledgeBaseId", "Category");
+
+                    b.HasIndex("KnowledgeBaseId", "Status");
 
                     b.ToTable("Documents");
                 });
@@ -202,6 +204,11 @@ namespace RagPipeline.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("Embedding");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
 
                     b.HasIndex("SearchVector");
 
