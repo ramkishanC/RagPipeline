@@ -20,5 +20,7 @@ namespace RagPipeline.Domain.Entities
         public ICollection<Conversation> Conversations { get; set; } = new List<Conversation>();
 
         public ICollection<AnswerFeedback> Feedbacks { get; set; } = new List<AnswerFeedback>();
+
+        public ICollection<RagQueryTelemetry> QueryTelemetries { get; set; } = new List<RagQueryTelemetry>();
     }
 }

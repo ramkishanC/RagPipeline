@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RagPipeline.Application.DTOs;
+using RagPipeline.Application.DTOs.Admin;
 using RagPipeline.Application.DTOs.Search;
 using RagPipeline.Application.Interfaces.Services;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -24,10 +26,11 @@ namespace RagPipeline.API.Controllers
         private readonly IConversationService _conversationService;
         private readonly IQueryRewritingService _queryRewritingService;
         private readonly IContextExpansionService _contextExpansionService;
+        private readonly IObservabilityService _observabilityService;
 
         private readonly double _minimumRerankScore;
 
-        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration, IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService, IConversationService conversationService, IQueryRewritingService queryRewritingService, IContextExpansionService contextExpansionService)
+        public SearchController(IVectorSearchService vectorSearchService, IKeywordSearchService keywordSearchService, IHybridSearchService hybridSearchService, IRerankedSearchService rerankedSearchService, IAnswerGenerationService answerGenerationService, IConfiguration configuration, IKnowledgeBaseService knowledgeBaseService, ICurrentUserService currentUserService, IConversationService conversationService, IQueryRewritingService queryRewritingService, IContextExpansionService contextExpansionService, IObservabilityService observabilityService)
         {
             _vectorSearchService = vectorSearchService;
             _keywordSearchService = keywordSearchService;
@@ -40,6 +43,7 @@ namespace RagPipeline.API.Controllers
             _conversationService = conversationService;
             _queryRewritingService = queryRewritingService;
             _contextExpansionService = contextExpansionService;
+            _observabilityService = observabilityService;
         }
 
         /// <summary>Searches vectors within a knowledge base owned by the current user.</summary>
@@ -218,10 +222,15 @@ namespace RagPipeline.API.Controllers
             // 3. Save current user query to DB via Service Layer
             await _conversationService.AddMessageAsync(currentConversationId, "user", request.Query, null, cancellationToken);
 
+            var totalSw = Stopwatch.StartNew();
+
             // 4. Rewrite query into a standalone search query using conversation history
+            var rewriteSw = Stopwatch.StartNew();
             var standaloneQuery = await _queryRewritingService.RewriteQueryAsync(request.Query, history, cancellationToken);
+            rewriteSw.Stop();
 
             // 5. Execute RAG Retrieval using the standalone rewritten query
+            var retrievalSw = Stopwatch.StartNew();
             var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, standaloneQuery, request.TopK, request.Category, request.Tags, request.VectorWeight, request.KeywordWeight, cancellationToken);
 
             var relevantResults = rerankedResult.Results
@@ -231,10 +240,13 @@ namespace RagPipeline.API.Controllers
             // 6. Handle "No Context Found" Gracefully
             if (relevantResults.Count == 0)
             {
+                retrievalSw.Stop();
+                totalSw.Stop();
                 var noContextAnswer = "I don't have enough information in the provided documents to answer this question.";
 
                 // Save AI fallback response via Service Layer
                 var noContextMsgId = await _conversationService.AddMessageAsync(currentConversationId, "assistant", noContextAnswer, null, cancellationToken);
+                await _observabilityService.RecordQueryTelemetryAsync(new RecordQueryTelemetryRequest { KnowledgeBaseId = request.KnowledgeBaseId, ConversationId = currentConversationId, Query = request.Query, RewrittenQuery = standaloneQuery, RewriteLatencyMs = rewriteSw.ElapsedMilliseconds, RetrievalLatencyMs = retrievalSw.ElapsedMilliseconds, LlmLatencyMs = 0, TotalLatencyMs = totalSw.ElapsedMilliseconds, RetrievedChunkCount = 0, PromptText = request.Query, CompletionText = noContextAnswer, IsNoAnswer = true, CitationsValid = true }, cancellationToken);
 
                 return Ok(new AskResponse
                 {
@@ -261,16 +273,20 @@ namespace RagPipeline.API.Controllers
                 })
                 .ToList();
 
-            var context = await _contextExpansionService.BuildExpandedContextAsync(
-                relevantResults,
-                request.ContextWindowSize,
-                cancellationToken);
+            var context = await _contextExpansionService.BuildExpandedContextAsync(relevantResults, request.ContextWindowSize, cancellationToken);
+            retrievalSw.Stop();
 
             // 8. Generate Answer via Ollama (passing history)
+            var llmSw = Stopwatch.StartNew();
             var answer = await _answerGenerationService.GenerateAnswerAsync(request.Query, context, history, cancellationToken);
+            llmSw.Stop();
+            totalSw.Stop();
+            var citationsValid = HasValidCitations(answer, sources.Count);
+            var isLlmAbstention = answer.Trim().Equals("The information is not available in the provided context.", StringComparison.OrdinalIgnoreCase);
+            await _observabilityService.RecordQueryTelemetryAsync(new RecordQueryTelemetryRequest { KnowledgeBaseId = request.KnowledgeBaseId, ConversationId = currentConversationId, Query = request.Query, RewrittenQuery = standaloneQuery, RewriteLatencyMs = rewriteSw.ElapsedMilliseconds, RetrievalLatencyMs = retrievalSw.ElapsedMilliseconds, LlmLatencyMs = llmSw.ElapsedMilliseconds, TotalLatencyMs = totalSw.ElapsedMilliseconds, RetrievedChunkCount = relevantResults.Count, PromptText = string.Join("\n", context) + "\n" + request.Query, CompletionText = answer, IsNoAnswer = isLlmAbstention, CitationsValid = citationsValid, IsSuccess = citationsValid, ErrorMessage = citationsValid ? null : "Generated answer citations could not be verified." }, cancellationToken);
 
             // 9. Validate & Mark Cited Sources
-            if (!HasValidCitations(answer, sources.Count))
+            if (!citationsValid)
             {
                 var fallbackAnswer = "I could not verify the generated answer against the retrieved sources.";
                 var fallbackMsgId = await _conversationService.AddMessageAsync(currentConversationId, "assistant", fallbackAnswer, JsonSerializer.Serialize(sources), cancellationToken);
@@ -366,7 +382,10 @@ namespace RagPipeline.API.Controllers
             // 3. History, User Message Saving & Query Rewriting
             var history = await _conversationService.GetRecentMessagesAsync(currentConversationId, 6, cancellationToken);
             await _conversationService.AddMessageAsync(currentConversationId, "user", request.Query, null, cancellationToken);
+            var totalSw = Stopwatch.StartNew();
+            var rewriteSw = Stopwatch.StartNew();
             var standaloneQuery = await _queryRewritingService.RewriteQueryAsync(request.Query, history, cancellationToken);
+            rewriteSw.Stop();
 
             // Send initial metadata payload (including the rewritten query)
             var metaPayload = JsonSerializer.Serialize(new
@@ -379,13 +398,17 @@ namespace RagPipeline.API.Controllers
             await Response.Body.FlushAsync(cancellationToken);
 
             // 4. RAG Retrieval using the standalone rewritten query
+            var retrievalSw = Stopwatch.StartNew();
             var rerankedResult = await _rerankedSearchService.SearchAsync(request.KnowledgeBaseId, standaloneQuery, request.TopK, request.Category, request.Tags, request.VectorWeight, request.KeywordWeight, cancellationToken);
             var relevantResults = rerankedResult.Results.Where(x => x.RerankScore >= _minimumRerankScore).ToList();
 
             if (relevantResults.Count == 0)
             {
+                retrievalSw.Stop();
+                totalSw.Stop();
                 var noContextAnswer = "I don't have enough information in the provided documents to answer this question.";
                 var noContextMessageId = await _conversationService.AddMessageAsync(currentConversationId, "assistant", noContextAnswer, null, cancellationToken);
+                await _observabilityService.RecordQueryTelemetryAsync(new RecordQueryTelemetryRequest { KnowledgeBaseId = request.KnowledgeBaseId, ConversationId = currentConversationId, Query = request.Query, RewrittenQuery = standaloneQuery, RewriteLatencyMs = rewriteSw.ElapsedMilliseconds, RetrievalLatencyMs = retrievalSw.ElapsedMilliseconds, LlmLatencyMs = 0, TotalLatencyMs = totalSw.ElapsedMilliseconds, RetrievedChunkCount = 0, PromptText = request.Query, CompletionText = noContextAnswer, IsNoAnswer = true, CitationsValid = true }, cancellationToken);
 
                 var payload = JsonSerializer.Serialize(new { type = "chunk", messageId = noContextMessageId, text = noContextAnswer });
                 await Response.WriteAsync($"data: {payload}\n\n", cancellationToken);
@@ -406,12 +429,11 @@ namespace RagPipeline.API.Controllers
                 Content = x.Content
             }).ToList();
 
-            var context = await _contextExpansionService.BuildExpandedContextAsync(
-                relevantResults,
-                request.ContextWindowSize,
-                cancellationToken);
+            var context = await _contextExpansionService.BuildExpandedContextAsync(relevantResults, request.ContextWindowSize, cancellationToken);
+            retrievalSw.Stop();
 
             // 6. Execute Streaming
+            var llmSw = Stopwatch.StartNew();
             var stream = _answerGenerationService.GenerateStreamedAnswerAsync(request.Query, context, history, cancellationToken);
             var fullAnswer = new StringBuilder();
 
@@ -423,10 +445,14 @@ namespace RagPipeline.API.Controllers
                 await Response.WriteAsync($"data: {chunkPayload}\n\n", cancellationToken);
                 await Response.Body.FlushAsync(cancellationToken);
             }
+            llmSw.Stop();
+            totalSw.Stop();
 
             // 7. Mark Cited Sources, Emit Sources Event & Save Assistant Message to DB
             var finalAnswerString = fullAnswer.ToString();
             var citationsValid = HasValidCitations(finalAnswerString, sources.Count);
+            var isLlmAbstention = finalAnswerString.Trim().Equals("The information is not available in the provided context.", StringComparison.OrdinalIgnoreCase);
+            await _observabilityService.RecordQueryTelemetryAsync(new RecordQueryTelemetryRequest { KnowledgeBaseId = request.KnowledgeBaseId, ConversationId = currentConversationId, Query = request.Query, RewrittenQuery = standaloneQuery, RewriteLatencyMs = rewriteSw.ElapsedMilliseconds, RetrievalLatencyMs = retrievalSw.ElapsedMilliseconds, LlmLatencyMs = llmSw.ElapsedMilliseconds, TotalLatencyMs = totalSw.ElapsedMilliseconds, RetrievedChunkCount = relevantResults.Count, PromptText = string.Join("\n", context) + "\n" + request.Query, CompletionText = finalAnswerString, IsNoAnswer = isLlmAbstention, CitationsValid = citationsValid, IsSuccess = citationsValid, ErrorMessage = citationsValid ? null : "Generated answer citations could not be verified." }, cancellationToken);
             MarkCitedSources(finalAnswerString, sources);
 
             var assistantMessageId = await _conversationService.AddMessageAsync(currentConversationId, "assistant", finalAnswerString, JsonSerializer.Serialize(sources), cancellationToken);

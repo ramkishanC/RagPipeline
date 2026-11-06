@@ -28,6 +28,8 @@ namespace RagPipeline.Infrastructure.Persistence
 
         public DbSet<AnswerFeedback> AnswerFeedbacks { get; set; }
 
+        public DbSet<RagQueryTelemetry> RagQueryTelemetries { get; set; }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -139,6 +141,22 @@ namespace RagPipeline.Infrastructure.Persistence
                     .OnDelete(DeleteBehavior.Cascade);
 
                 entity.HasIndex(f => new { f.KnowledgeBaseId, f.IsHelpful });
+            });
+
+            modelBuilder.Entity<RagQueryTelemetry>(entity =>
+            {
+                entity.HasKey(t => t.Id);
+
+                entity.Property(t => t.Query)
+                    .IsRequired();
+
+                entity.HasOne(t => t.KnowledgeBase)
+                    .WithMany(kb => kb.QueryTelemetries)
+                    .HasForeignKey(t => t.KnowledgeBaseId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasIndex(t => new { t.KnowledgeBaseId, t.CreatedAt });
+                entity.HasIndex(t => new { t.KnowledgeBaseId, t.IsNoAnswer });
             });
         }
     }

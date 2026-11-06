@@ -70,6 +70,7 @@ namespace RagPipeline.API
             builder.Services.AddScoped<IKnowledgeBaseRepository, KnowledgeBaseRepository>();
             builder.Services.AddScoped<IConversationRepository, ConversationRepository>();
             builder.Services.AddScoped<IFeedbackRepository, FeedbackRepository>();
+            builder.Services.AddScoped<IObservabilityRepository, ObservabilityRepository>();
 
             builder.Services.AddScoped<IKnowledgeBaseService, KnowledgeBaseService>();
             builder.Services.AddScoped<ICurrentUserService, ClaimsCurrentUserService>();
@@ -84,6 +85,7 @@ namespace RagPipeline.API
             builder.Services.AddScoped<IConversationService, ConversationService>();
             builder.Services.AddScoped<IRagEvaluationService, RagEvaluationService>();
             builder.Services.AddScoped<IFeedbackService, FeedbackService>();
+            builder.Services.AddScoped<IObservabilityService, ObservabilityService>();
 
             builder.Services.AddHttpClient<IEmbeddingService, OllamaEmbeddingService>(client =>
             {
