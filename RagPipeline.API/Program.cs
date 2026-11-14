@@ -34,6 +34,17 @@ namespace RagPipeline.API
 
             // Add services to the container.
 
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AngularClient", policy =>
+                {
+                    policy.WithOrigins("http://localhost:4200")
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .WithExposedHeaders("Retry-After");
+                });
+            });
+
             builder.Services.AddControllers();
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
@@ -154,21 +165,25 @@ namespace RagPipeline.API
                 client.Timeout = TimeSpan.FromMinutes(2);
             });
             builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-                .AddJwtBearer(options =>
-                {
-                    options.MapInboundClaims = false;
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-                        ValidAudience = builder.Configuration["Jwt:Audience"],
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!)),
-                        ClockSkew = TimeSpan.Zero
-                    };
-                });
+                            .AddJwtBearer(options =>
+                            {
+                                options.MapInboundClaims = false;
+                                options.Authority = builder.Configuration["Keycloak:Authority"];
+                                options.Audience = builder.Configuration["Keycloak:Audience"];
+                                options.RequireHttpsMetadata = builder.Configuration.GetValue<bool>("Keycloak:RequireHttpsMetadata");
+
+                                options.TokenValidationParameters = new TokenValidationParameters
+                                {
+                                    ValidateIssuer = true,
+                                    ValidIssuer = builder.Configuration["Keycloak:Authority"],
+                                    ValidateAudience = false,
+                                    ValidateLifetime = true,
+                                    ValidateIssuerSigningKey = true,
+                                    NameClaimType = "preferred_username",
+                                    RoleClaimType = "roles",
+                                    ClockSkew = TimeSpan.FromSeconds(30)
+                                };
+                            });
 
             builder.Services.AddMassTransit(x =>
             {
@@ -199,6 +214,8 @@ namespace RagPipeline.API
             }
 
             app.UseHttpsRedirection();
+
+            app.UseCors("AngularClient");
 
             app.UseAuthentication();
             app.UseAuthorization();

@@ -152,7 +152,8 @@ namespace RagPipeline.Application.Services
                 Status = document.Status.ToString(),
                 ErrorMessage = document.ErrorMessage,
                 Category = document.Category,
-                Tags = document.Tags
+                Tags = document.Tags,
+                ChunkCount = document.Chunks?.Count ?? 0
             };
         }
     }

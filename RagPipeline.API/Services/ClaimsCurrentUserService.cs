@@ -15,17 +15,27 @@ namespace RagPipeline.API.Services
 
         public string? GetUserId()
         {
-            var user = _httpContextAccessor.HttpContext?.User;
-
-            if (user?.Identity is null || !user.Identity.IsAuthenticated)
+            var httpContext = _httpContextAccessor.HttpContext;
+            if (httpContext == null)
             {
                 return null;
             }
 
-            // Since MapInboundClaims = false, the claim name remains "sub"
-            return user.FindFirstValue(JwtRegisteredClaimNames.Sub)
-                ?? user.FindFirstValue(ClaimTypes.NameIdentifier)
-                ?? user.FindFirstValue("sub");
+            var subClaim = httpContext.User.FindFirstValue("sub")
+                        ?? httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (!string.IsNullOrWhiteSpace(subClaim))
+            {
+                return subClaim;
+            }
+
+            if (httpContext.Request.Headers.TryGetValue("X-User-Id", out var headerUserId) &&
+                !string.IsNullOrWhiteSpace(headerUserId))
+            {
+                return headerUserId.ToString();
+            }
+
+            return null;
         }
     }
 }

@@ -2,17 +2,20 @@ services:
   postgres:
     image: pgvector/pgvector:pg17
     container_name: rag-postgres
-
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ragdb
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-
     ports:
       - "5433:5432"
-
     volumes:
       - rag_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d ragdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   ollama:
     image: ollama/ollama:latest
@@ -51,9 +54,42 @@ services:
     volumes:
       - rag_rabbitmq_data:/var/lib/rabbitmq
 
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0.0
+    container_name: rag-keycloak
+    restart: unless-stopped
+    command: start-dev
+    environment:
+      KC_DB: postgres
+      # Inside the Docker network, Postgres listens on internal port 5432
+      KC_DB_URL: jdbc:postgresql://postgres:5432/ragdb
+      KC_DB_SCHEMA: public
+      KC_DB_USERNAME: postgres
+      KC_DB_PASSWORD: postgres
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_HTTP_PORT: 8080
+      KC_HEALTH_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  seq:
+    image: datalust/seq:latest
+    container_name: rag-seq
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+    ports:
+      - "5341:80" # Seq Web UI (http://localhost:5341)
+    volumes:
+      - rag_seq_data:/data
 
 volumes:
   rag_postgres_data:
   rag_ollama_data:
   rag_reranker_models:
   rag_rabbitmq_data:
+  rag_seq_data:

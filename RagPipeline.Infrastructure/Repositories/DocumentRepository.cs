@@ -22,12 +22,20 @@ namespace RagPipeline.Infrastructure.Repositories
 
         public async Task<Document?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
         {
-            return await _dbContext.Documents.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+            return await _dbContext.Documents
+                .Include(x => x.Chunks)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
         }
 
         public async Task<List<Document>> GetAllByKnowledgeBaseIdAsync(Guid knowledgeBaseId, CancellationToken cancellationToken = default)
         {
-            return await _dbContext.Documents.AsNoTracking().Where(x => x.KnowledgeBaseId == knowledgeBaseId).OrderByDescending(x => x.CreatedAt).ToListAsync(cancellationToken);
+            return await _dbContext.Documents
+                .Include(x => x.Chunks)
+                .AsNoTracking()
+                .Where(x => x.KnowledgeBaseId == knowledgeBaseId)
+                .OrderByDescending(x => x.CreatedAt)
+                .ToListAsync(cancellationToken);
         }
 
         public async Task<bool> KnowledgeBaseExistsAsync(Guid knowledgeBaseId, CancellationToken cancellationToken = default)
